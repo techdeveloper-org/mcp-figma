@@ -1,0 +1,19 @@
+{
+  "id": "cs1",
+  "name": "Button",
+  "type": "COMPONENT_SET",
+  "componentPropertyDefinitions": {
+    "Variant": {
+      "type": "VARIANT",
+      "variantOptions": ["Primary", "Secondary", "Danger"]
+    },
+    "Size": {
+      "type": "VARIANT",
+      "variantOptions": ["Small", "Medium", "Large"]
+    },
+    "Disabled": {
+      "type": "VARIANT",
+      "variantOptions": ["True", "False"]
+    }
+  }
+}

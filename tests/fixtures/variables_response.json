@@ -1,0 +1,39 @@
+{
+  "status": 200,
+  "error": false,
+  "meta": {
+    "variableCollections": {
+      "vc1": {
+        "id": "vc1",
+        "name": "Colors",
+        "modes": [{"modeId": "m1", "name": "Default"}],
+        "defaultModeId": "m1",
+        "variableIds": ["v1", "v2"]
+      }
+    },
+    "variables": {
+      "v1": {
+        "id": "v1",
+        "name": "primary",
+        "variableCollectionId": "vc1",
+        "resolvedType": "COLOR",
+        "valuesByMode": {
+          "m1": {"r": 0.24, "g": 0.42, "b": 0.93, "a": 1.0}
+        },
+        "remote": false,
+        "key": "abc"
+      },
+      "v2": {
+        "id": "v2",
+        "name": "secondary",
+        "variableCollectionId": "vc1",
+        "resolvedType": "COLOR",
+        "valuesByMode": {
+          "m1": {"id": "v1", "type": "VARIABLE_ALIAS"}
+        },
+        "remote": false,
+        "key": "def"
+      }
+    }
+  }
+}

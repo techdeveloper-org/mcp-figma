@@ -1,0 +1,15 @@
+{
+  "name": "Test File",
+  "lastModified": "2026-01-01T00:00:00Z",
+  "version": "1",
+  "thumbnailUrl": "https://figma-alpha-api.s3.us-west-2.amazonaws.com/img/test.png",
+  "document": {
+    "id": "0:0",
+    "name": "Document",
+    "type": "DOCUMENT",
+    "children": [
+      {"id": "1:1", "name": "Page 1", "type": "CANVAS"},
+      {"id": "1:2", "name": "Page 2", "type": "CANVAS"}
+    ]
+  }
+}

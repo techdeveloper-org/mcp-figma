@@ -1,0 +1,11 @@
+{
+  "$schema": "https://tr.designtokens.org/format/",
+  "tokens": {
+    "token-a": {"$value": "{token-b}", "$type": "color"},
+    "token-b": {"$value": "{token-c}", "$type": "color"},
+    "token-c": {"$value": "#FF0000", "$type": "color"},
+    "cycle-x": {"$value": "{cycle-y}", "$type": "color"},
+    "cycle-y": {"$value": "{cycle-x}", "$type": "color"},
+    "standalone": {"$value": "#0000FF", "$type": "color"}
+  }
+}

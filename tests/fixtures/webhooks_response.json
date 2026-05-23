@@ -1,0 +1,26 @@
+{
+  "webhooks": [
+    {
+      "id": "wh1",
+      "team_id": "t1",
+      "event_type": "FILE_UPDATE",
+      "client_id": null,
+      "endpoint": "https://example.com/hook",
+      "passcode": "secret",
+      "status": "ACTIVE",
+      "description": "test webhook",
+      "protocol_version": "2"
+    },
+    {
+      "id": "wh2",
+      "team_id": "t1",
+      "event_type": "COMMENT",
+      "client_id": null,
+      "endpoint": "https://example.com/hook2",
+      "passcode": "secret2",
+      "status": "PAUSED",
+      "description": "paused webhook",
+      "protocol_version": "2"
+    }
+  ]
+}

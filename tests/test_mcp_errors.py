@@ -10,6 +10,7 @@ ASCII-only (cp1252 safe).
 import json
 import os
 import sys
+from unittest.mock import patch
 
 import pytest
 
@@ -243,3 +244,22 @@ def test_mcp_safe_execute_custom_error_type_in_response():
     )
     data = json.loads(result)
     assert data["error_type"] == "VALIDATION_ERROR"
+
+
+@pytest.mark.unit
+def test_mcp_errors_import_fallback_with_missing_base_response():
+    """mcp_errors module loads cleanly even when base.response is unavailable.
+
+    Covers the 'except ImportError: pass' branch at module level.
+    """
+    import importlib
+    import mcp_errors as me
+
+    with patch.dict(sys.modules, {"base.response": None}):
+        importlib.reload(me)
+
+    result = me.mcp_error_response("ERR", "fallback test")
+    data = json.loads(result)
+    assert data["status"] == "ERROR"
+
+    importlib.reload(me)

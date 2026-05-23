@@ -456,3 +456,108 @@ def test_android_fontweight_token_to_sp():
     }
     result = tokens_to_android(dtcg, density=2.0)
     assert result["dimen_count"] == 1
+
+
+@pytest.mark.unit
+def test_android_fontweight_unparseable_value_skipped():
+    """fontWeight token with non-numeric value like 'bold' emits nothing."""
+    dtcg = {
+        "tokens": {
+            "weight.bold": {"$value": "bold", "$type": "fontWeight"},
+        }
+    }
+    result = tokens_to_android(dtcg, density=2.0)
+    assert result["dimen_count"] == 0
+
+
+@pytest.mark.unit
+def test_android_dimension_unparseable_value_skipped():
+    """Dimension token with non-numeric value is skipped (px is None continue)."""
+    dtcg = {
+        "tokens": {
+            "spacing.bad": {"$value": "auto", "$type": "dimension"},
+        }
+    }
+    result = tokens_to_android(dtcg, density=2.0)
+    assert result["dimen_count"] == 0
+
+
+@pytest.mark.unit
+def test_to_snake_case_all_underscores_returns_token():
+    """_to_snake_case returns 'token' when input reduces to empty after stripping."""
+    from figma_multiplatform import _to_snake_case
+    assert _to_snake_case("___") == "token"
+
+
+@pytest.mark.unit
+def test_to_camel_case_empty_string_returns_token():
+    """_to_camel_case returns 'token' when input is empty string."""
+    from figma_multiplatform import _to_camel_case
+    assert _to_camel_case("") == "token"
+
+
+@pytest.mark.unit
+def test_parse_px_value_invalid_px_suffix_returns_none():
+    """_parse_px_value returns None for non-numeric 'px' suffixed strings."""
+    from figma_multiplatform import _parse_px_value
+    assert _parse_px_value("abcpx") is None
+
+
+@pytest.mark.unit
+def test_parse_px_value_invalid_pt_suffix_returns_none():
+    """_parse_px_value returns None for non-numeric 'pt' suffixed strings."""
+    from figma_multiplatform import _parse_px_value
+    assert _parse_px_value("abcpt") is None
+
+
+@pytest.mark.unit
+def test_dark_mode_invalid_hex_token_skipped():
+    """A color token with an invalid hex value is silently skipped."""
+    dtcg = {
+        "tokens": {
+            "bad.color": {"$value": "#XXXXXX", "$type": "color"},
+            "good.color": {"$value": "#ffffff", "$type": "color"},
+        }
+    }
+    result = dark_mode_token_pairs(dtcg)
+    assert result["pair_count"] == 1
+    assert result["pairs"][0]["name"] == "good.color"
+
+
+@pytest.mark.unit
+def test_hex_to_rgb_mp_wrong_length_raises():
+    """_hex_to_rgb_mp raises ValueError for hex values that are not 3 or 6 chars."""
+    from figma_multiplatform import _hex_to_rgb_mp
+    with pytest.raises(ValueError):
+        _hex_to_rgb_mp("#XXXX")
+
+
+@pytest.mark.unit
+def test_to_camel_case_trailing_delimiter_skips_empty_part():
+    """_to_camel_case skips empty parts from trailing delimiters."""
+    from figma_multiplatform import _to_camel_case
+    assert _to_camel_case("spacing.") == "spacing"
+
+
+@pytest.mark.unit
+def test_ios_dimension_unparseable_value_skipped():
+    """tokens_to_ios skips dimension tokens whose value cannot be parsed as px."""
+    dtcg = {
+        "tokens": {
+            "size.bad": {"$value": "auto", "$type": "dimension"},
+        }
+    }
+    result = tokens_to_ios(dtcg)
+    assert len(result["pt_values"]) == 0
+
+
+@pytest.mark.unit
+def test_css_rem_dimension_unparseable_value_skipped():
+    """tokens_to_css_rem skips dimension tokens whose value cannot be parsed."""
+    dtcg = {
+        "tokens": {
+            "gap.bad": {"$value": "auto", "$type": "dimension"},
+        }
+    }
+    result = tokens_to_css_rem(dtcg)
+    assert len(result["rem_values"]) == 0

@@ -247,6 +247,24 @@ def test_update_webhook_returns_updated():
 
 
 @pytest.mark.unit
+def test_update_webhook_with_passcode_sends_passcode():
+    """update_webhook includes passcode in request body when passcode argument is provided."""
+    captured_requests = []
+
+    def capture(req, timeout=30):
+        captured_requests.append(req)
+        return make_mock_response({"id": "wh1"})
+
+    with patch.dict(os.environ, {"FIGMA_ACCESS_TOKEN": "tok"}, clear=False):
+        with patch("urllib.request.urlopen", side_effect=capture):
+            update_webhook("wh1", passcode="new-secret-pass")
+
+    body = json.loads(captured_requests[0].data.decode("utf-8"))
+    assert "passcode" in body
+    assert body["passcode"] == "new-secret-pass"
+
+
+@pytest.mark.unit
 def test_update_webhook_partial_fields():
     """update_webhook sends only non-None fields in the body."""
     captured_requests = []

@@ -591,3 +591,562 @@ def test_variables_to_dtcg_from_fixture():
     first_token = next(iter(tokens.values()))
     assert "$type" in first_token
     assert "$value" in first_token
+
+
+@pytest.mark.unit
+def test_variables_to_dtcg_float_font_scope():
+    """FLOAT variable with FONT_SIZE scope maps to 'dimension' token type."""
+    from figma_tokens import _variables_to_dtcg
+    data = {
+        "meta": {
+            "variableCollections": {
+                "col1": {"name": "Typography", "modes": [{"modeId": "m1", "name": "Default"}]}
+            },
+            "variables": {
+                "var1": {
+                    "name": "fontSize/body",
+                    "variableCollectionId": "col1",
+                    "resolvedType": "FLOAT",
+                    "scopes": ["FONT_SIZE"],
+                    "valuesByMode": {"m1": 16.0},
+                }
+            },
+        }
+    }
+    tokens = _variables_to_dtcg(data)
+    assert len(tokens) == 1
+    token = next(iter(tokens.values()))
+    assert token["$type"] == "dimension"
+    assert "px" in token["$value"]
+
+
+@pytest.mark.unit
+def test_variables_to_dtcg_float_number_scope():
+    """FLOAT variable without font scope maps to 'number' token type."""
+    from figma_tokens import _variables_to_dtcg
+    data = {
+        "meta": {
+            "variableCollections": {
+                "col1": {"name": "Numbers", "modes": [{"modeId": "m1", "name": "Default"}]}
+            },
+            "variables": {
+                "var1": {
+                    "name": "spacing/sm",
+                    "variableCollectionId": "col1",
+                    "resolvedType": "FLOAT",
+                    "scopes": ["CORNER_RADIUS"],
+                    "valuesByMode": {"m1": 8.0},
+                }
+            },
+        }
+    }
+    tokens = _variables_to_dtcg(data)
+    assert len(tokens) == 1
+    token = next(iter(tokens.values()))
+    assert token["$type"] == "number"
+    assert token["$value"] == 8.0
+
+
+@pytest.mark.unit
+def test_variables_to_dtcg_string_type():
+    """STRING variable maps to 'fontFamily' token type."""
+    from figma_tokens import _variables_to_dtcg
+    data = {
+        "meta": {
+            "variableCollections": {
+                "col1": {"name": "Fonts", "modes": [{"modeId": "m1", "name": "Default"}]}
+            },
+            "variables": {
+                "var1": {
+                    "name": "font/sans",
+                    "variableCollectionId": "col1",
+                    "resolvedType": "STRING",
+                    "scopes": [],
+                    "valuesByMode": {"m1": "Inter"},
+                }
+            },
+        }
+    }
+    tokens = _variables_to_dtcg(data)
+    assert len(tokens) == 1
+    token = next(iter(tokens.values()))
+    assert token["$type"] == "fontFamily"
+    assert token["$value"] == "Inter"
+
+
+@pytest.mark.unit
+def test_variables_to_dtcg_unknown_type_defaults_to_number():
+    """Unknown resolvedType defaults to 'number' token type."""
+    from figma_tokens import _variables_to_dtcg
+    data = {
+        "meta": {
+            "variableCollections": {
+                "col1": {"name": "Other", "modes": [{"modeId": "m1", "name": "Default"}]}
+            },
+            "variables": {
+                "var1": {
+                    "name": "custom/var",
+                    "variableCollectionId": "col1",
+                    "resolvedType": "BOOLEAN",
+                    "scopes": [],
+                    "valuesByMode": {"m1": 1.0},
+                }
+            },
+        }
+    }
+    tokens = _variables_to_dtcg(data)
+    assert len(tokens) == 1
+    token = next(iter(tokens.values()))
+    assert token["$type"] == "number"
+
+
+@pytest.mark.unit
+def test_variables_to_dtcg_color_rgba_dict_mode_val():
+    """COLOR variable with RGBA dict value maps to hex color."""
+    from figma_tokens import _variables_to_dtcg
+    data = {
+        "meta": {
+            "variableCollections": {
+                "col1": {"name": "Colors", "modes": [{"modeId": "m1", "name": "Default"}]}
+            },
+            "variables": {
+                "var1": {
+                    "name": "color/primary",
+                    "variableCollectionId": "col1",
+                    "resolvedType": "COLOR",
+                    "scopes": [],
+                    "valuesByMode": {
+                        "m1": {"r": 0.0, "g": 0.33, "b": 1.0}
+                    },
+                }
+            },
+        }
+    }
+    tokens = _variables_to_dtcg(data)
+    assert len(tokens) == 1
+    token = next(iter(tokens.values()))
+    assert token["$type"] == "color"
+    assert token["$value"].startswith("#")
+
+
+@pytest.mark.unit
+def test_variables_to_dtcg_alias_dict_mode_val():
+    """COLOR variable with alias dict (has 'id') maps to alias reference."""
+    from figma_tokens import _variables_to_dtcg
+    data = {
+        "meta": {
+            "variableCollections": {
+                "col1": {"name": "Colors", "modes": [{"modeId": "m1", "name": "Default"}]}
+            },
+            "variables": {
+                "var1": {
+                    "name": "color/alias",
+                    "variableCollectionId": "col1",
+                    "resolvedType": "COLOR",
+                    "scopes": [],
+                    "valuesByMode": {
+                        "m1": {"id": "var2"}
+                    },
+                },
+                "var2": {
+                    "name": "color/base",
+                    "variableCollectionId": "col1",
+                    "resolvedType": "COLOR",
+                    "scopes": [],
+                    "valuesByMode": {
+                        "m1": {"r": 1.0, "g": 0.0, "b": 0.0}
+                    },
+                },
+            },
+        }
+    }
+    tokens = _variables_to_dtcg(data)
+    alias_token = tokens.get("colors.color.alias.default")
+    assert alias_token is not None
+    assert alias_token["$value"].startswith("{")
+
+
+@pytest.mark.unit
+def test_variables_to_dtcg_dimension_int_float_mode_val():
+    """FLOAT dimension variable with numeric (int/float) mode value gets 'px' suffix."""
+    from figma_tokens import _variables_to_dtcg
+    data = {
+        "meta": {
+            "variableCollections": {
+                "col1": {"name": "Spacing", "modes": [{"modeId": "m1", "name": "Default"}]}
+            },
+            "variables": {
+                "var1": {
+                    "name": "spacing/md",
+                    "variableCollectionId": "col1",
+                    "resolvedType": "FLOAT",
+                    "scopes": ["FONT_SIZE"],
+                    "valuesByMode": {"m1": 16},
+                }
+            },
+        }
+    }
+    tokens = _variables_to_dtcg(data)
+    token = next(iter(tokens.values()))
+    assert token["$type"] == "dimension"
+    assert "px" in str(token["$value"])
+
+
+@pytest.mark.unit
+def test_tokens_to_css_vars_font_family_with_spaces_quoted():
+    """fontFamily token list value with spaces gets individual quotes."""
+    dtcg = {
+        "tokens": {
+            "font.display": {
+                "$value": ["Inter UI", "sans-serif"],
+                "$type": "fontFamily",
+            },
+        }
+    }
+    result = tokens_to_css_vars(dtcg)
+    assert '"Inter UI"' in result["css_content"]
+
+
+@pytest.mark.unit
+def test_tokens_to_css_vars_unknown_type_uses_str():
+    """Unknown token type emits the value as a plain string."""
+    dtcg = {
+        "tokens": {
+            "custom.token": {"$value": "custom-value", "$type": "custom"},
+        }
+    }
+    result = tokens_to_css_vars(dtcg)
+    assert "custom-value" in result["css_content"]
+
+
+@pytest.mark.unit
+def test_resolve_aliases_matched_added_skipped_in_second_rename():
+    """When best_add is already matched in renamed, the second rename falls through."""
+    prev = {
+        "tokens": {
+            "a": {"$value": "#111", "$type": "color"},
+            "b": {"$value": "#222", "$type": "color"},
+        }
+    }
+    curr = {
+        "tokens": {
+            "aa": {"$value": "#111", "$type": "color"},
+        }
+    }
+    result = diff_token_versions(prev, curr)
+    renamed_froms = [r["from_name"] for r in result["renamed"]]
+    assert len(result["renamed"]) <= 1
+    remaining_deleted = result["deleted"]
+    assert isinstance(remaining_deleted, list)
+
+
+# ---------------------------------------------------------------------------
+# Coverage gap: _srgb_to_linear high branch (line 52)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_linear_to_srgb_high_value_branch():
+    """_linear_to_srgb uses gamma formula for values > 0.0031308 (line 52)."""
+    from figma_tokens import _linear_to_srgb
+    import math
+    result = _linear_to_srgb(0.5)
+    expected = 1.055 * math.pow(0.5, 1.0 / 2.4) - 0.055
+    assert abs(result - expected) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Coverage gap: _hex_to_rgb raises for non-3 non-6 length hex (line 107)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_hex_to_rgb_4char_raises_value_error():
+    """_hex_to_rgb raises ValueError for a 4-character hex string (line 107 branch)."""
+    from figma_tokens import _hex_to_rgb
+    import pytest as _pytest
+    with _pytest.raises(ValueError, match="Invalid hex color"):
+        _hex_to_rgb("XYZW")
+
+
+# ---------------------------------------------------------------------------
+# Coverage gap: _extract_tokens_from_nodes branches (lines 183-226)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_extract_tokens_from_nodes_invisible_fill_skipped():
+    """Fill with visible=False is not extracted as a color token."""
+    from figma_tokens import _extract_tokens_from_nodes
+    nodes = [
+        {
+            "name": "MyNode",
+            "fills": [
+                {"type": "SOLID", "visible": False, "color": {"r": 1.0, "g": 0.0, "b": 0.0}},
+            ],
+            "effects": [],
+        }
+    ]
+    tokens = _extract_tokens_from_nodes(nodes)
+    assert all("color" not in k for k in tokens.keys())
+
+
+@pytest.mark.unit
+def test_extract_tokens_from_nodes_multiple_fills_get_suffix():
+    """Second fill on a node generates a token key with '.1' suffix."""
+    from figma_tokens import _extract_tokens_from_nodes
+    nodes = [
+        {
+            "name": "MultiNode",
+            "fills": [
+                {"type": "SOLID", "visible": True, "color": {"r": 1.0, "g": 0.0, "b": 0.0}},
+                {"type": "SOLID", "visible": True, "color": {"r": 0.0, "g": 1.0, "b": 0.0}},
+            ],
+            "effects": [],
+        }
+    ]
+    tokens = _extract_tokens_from_nodes(nodes)
+    assert any(".color.1" in k for k in tokens.keys())
+
+
+@pytest.mark.unit
+def test_extract_tokens_from_nodes_typography_style():
+    """Nodes with a text style dict produce fontFamily, fontSize, fontWeight tokens."""
+    from figma_tokens import _extract_tokens_from_nodes
+    nodes = [
+        {
+            "name": "TextNode",
+            "fills": [],
+            "style": {
+                "fontFamily": "Inter",
+                "fontSize": 14,
+                "fontWeight": 700,
+            },
+            "effects": [],
+        }
+    ]
+    tokens = _extract_tokens_from_nodes(nodes)
+    assert any("fontFamily" in k for k in tokens.keys())
+    assert any("fontSize" in k for k in tokens.keys())
+    assert any("fontWeight" in k for k in tokens.keys())
+
+
+@pytest.mark.unit
+def test_extract_tokens_from_nodes_shadow_effect():
+    """Nodes with a visible DROP_SHADOW effect produce a shadow color token."""
+    from figma_tokens import _extract_tokens_from_nodes
+    nodes = [
+        {
+            "name": "ShadowNode",
+            "fills": [],
+            "effects": [
+                {
+                    "type": "DROP_SHADOW",
+                    "visible": True,
+                    "color": {"r": 0.0, "g": 0.0, "b": 0.0},
+                }
+            ],
+        }
+    ]
+    tokens = _extract_tokens_from_nodes(nodes)
+    assert any("shadow" in k for k in tokens.keys())
+
+
+@pytest.mark.unit
+def test_extract_tokens_from_nodes_invisible_shadow_skipped():
+    """Shadow effect with visible=False is skipped."""
+    from figma_tokens import _extract_tokens_from_nodes
+    nodes = [
+        {
+            "name": "HiddenShadow",
+            "fills": [],
+            "effects": [
+                {
+                    "type": "DROP_SHADOW",
+                    "visible": False,
+                    "color": {"r": 0.0, "g": 0.0, "b": 0.0},
+                }
+            ],
+        }
+    ]
+    tokens = _extract_tokens_from_nodes(nodes)
+    assert all("shadow" not in k for k in tokens.keys())
+
+
+@pytest.mark.unit
+def test_extract_tokens_from_nodes_multiple_shadows_get_suffix():
+    """Second visible shadow on a node generates a token key with '.1' suffix."""
+    from figma_tokens import _extract_tokens_from_nodes
+    nodes = [
+        {
+            "name": "MultiShadow",
+            "fills": [],
+            "effects": [
+                {"type": "DROP_SHADOW", "visible": True, "color": {"r": 0.1, "g": 0.1, "b": 0.1}},
+                {"type": "DROP_SHADOW", "visible": True, "color": {"r": 0.2, "g": 0.2, "b": 0.2}},
+            ],
+        }
+    ]
+    tokens = _extract_tokens_from_nodes(nodes)
+    assert any(".shadow.1" in k for k in tokens.keys())
+
+
+@pytest.mark.unit
+def test_extract_tokens_from_nodes_style_without_typography_fields():
+    """Style dict with none of fontFamily/fontSize/fontWeight skips those branches."""
+    from figma_tokens import _extract_tokens_from_nodes
+    nodes = [
+        {
+            "name": "StyledNode",
+            "fills": [],
+            "style": {"letterSpacing": 0},
+            "effects": [],
+        }
+    ]
+    tokens = _extract_tokens_from_nodes(nodes)
+    assert all("fontFamily" not in k for k in tokens.keys())
+    assert all("fontSize" not in k for k in tokens.keys())
+    assert all("fontWeight" not in k for k in tokens.keys())
+
+
+# ---------------------------------------------------------------------------
+# Coverage gap: _variables_to_dtcg mode name lookup (lines 281->286, 282->281)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_variables_to_dtcg_mode_name_matched_and_unmatched():
+    """Mode name is set to matching mode entry name; unmatched mode_id stays 'default'."""
+    from figma_tokens import _variables_to_dtcg
+    data = {
+        "meta": {
+            "variableCollections": {
+                "col1": {
+                    "name": "Colors",
+                    "modes": [
+                        {"modeId": "m1", "name": "Light"},
+                        {"modeId": "m2", "name": "Dark"},
+                    ],
+                }
+            },
+            "variables": {
+                "var1": {
+                    "name": "color/bg",
+                    "variableCollectionId": "col1",
+                    "resolvedType": "COLOR",
+                    "scopes": [],
+                    "valuesByMode": {
+                        "m1": {"r": 1.0, "g": 1.0, "b": 1.0},
+                        "m3": {"r": 0.0, "g": 0.0, "b": 0.0},
+                    },
+                }
+            },
+        }
+    }
+    tokens = _variables_to_dtcg(data)
+    keys = list(tokens.keys())
+    assert any("light" in k for k in keys), "m1 should map to 'light' mode name"
+    assert any("default" in k for k in keys), "m3 (no match) should stay 'default'"
+
+
+# ---------------------------------------------------------------------------
+# Coverage gap: extract_oklch_colors invisible fill and dup hex (408->407, 414->407)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_extract_oklch_colors_invisible_fill_not_counted():
+    """Invisible fills (visible=False) are excluded from the OKLCH color set."""
+    doc = {
+        "document": {
+            "id": "0:0",
+            "type": "DOCUMENT",
+            "name": "D",
+            "children": [
+                {
+                    "id": "1:0",
+                    "type": "RECTANGLE",
+                    "name": "Rect",
+                    "fills": [
+                        {
+                            "type": "SOLID",
+                            "visible": False,
+                            "color": {"r": 1.0, "g": 0.0, "b": 0.0},
+                        }
+                    ],
+                    "children": [],
+                }
+            ],
+        }
+    }
+    mock_resp = make_mock_response(doc)
+    with patch.dict(os.environ, {"FIGMA_ACCESS_TOKEN": "tok"}, clear=False):
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = extract_oklch_colors("FILEKEY")
+    assert result["count"] == 0
+
+
+@pytest.mark.unit
+def test_extract_oklch_colors_duplicate_hex_counted_once():
+    """Duplicate hex values across nodes produce only one color entry."""
+    same_color = {"r": 1.0, "g": 0.0, "b": 0.0}
+    doc = {
+        "document": {
+            "id": "0:0",
+            "type": "DOCUMENT",
+            "name": "D",
+            "children": [
+                {
+                    "id": "1:0",
+                    "type": "RECTANGLE",
+                    "name": "Rect1",
+                    "fills": [
+                        {"type": "SOLID", "visible": True, "color": same_color}
+                    ],
+                    "children": [],
+                },
+                {
+                    "id": "1:1",
+                    "type": "RECTANGLE",
+                    "name": "Rect2",
+                    "fills": [
+                        {"type": "SOLID", "visible": True, "color": same_color}
+                    ],
+                    "children": [],
+                },
+            ],
+        }
+    }
+    mock_resp = make_mock_response(doc)
+    with patch.dict(os.environ, {"FIGMA_ACCESS_TOKEN": "tok"}, clear=False):
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = extract_oklch_colors("FILEKEY")
+    assert result["count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Coverage gap: resolve_token_aliases _get_alias_target non-string (line 504)
+# and in_degree neighbor stays > 0 (line 532->530)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_resolve_aliases_non_string_value_not_treated_as_alias():
+    """Tokens with non-string $value (e.g. int) are not treated as aliases (line 504)."""
+    tokens = {
+        "tokens": {
+            "num-token": {"$value": 42, "$type": "number"},
+            "str-token": {"$value": "{num-token}", "$type": "number"},
+        }
+    }
+    result = resolve_token_aliases(tokens)
+    assert result["resolved_tokens"]["num-token"]["$value"] == 42
+
+
+@pytest.mark.unit
+def test_resolve_aliases_partial_cycle_neighbor_stays_nonzero():
+    """In a cycle, neighbors with in_degree > 0 after processing stay in cycles_detected."""
+    tokens = {
+        "tokens": {
+            "a": {"$value": "{b}", "$type": "color"},
+            "b": {"$value": "{c}", "$type": "color"},
+            "c": {"$value": "{a}", "$type": "color"},
+        }
+    }
+    result = resolve_token_aliases(tokens)
+    assert len(result["cycles_detected"]) == 3
+    assert result["aliases_resolved"] == 0

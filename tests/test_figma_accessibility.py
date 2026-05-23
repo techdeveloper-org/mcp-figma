@@ -258,6 +258,87 @@ def test_scan_color_accessibility_no_bg_no_fill_text_not_checked():
 
 
 @pytest.mark.unit
+def test_scan_color_accessibility_with_node_id():
+    """scan_color_accessibility uses /nodes endpoint when node_id is provided."""
+    nodes_resp = {
+        "nodes": {
+            "1:0": {
+                "document": {
+                    "id": "1:0",
+                    "type": "DOCUMENT",
+                    "name": "Doc",
+                    "children": [],
+                }
+            }
+        }
+    }
+    captured = []
+
+    def capture(req, timeout=30):
+        captured.append(req.full_url)
+        mock_resp = make_mock_response(nodes_resp)
+        return mock_resp
+
+    with patch.dict(os.environ, {"FIGMA_ACCESS_TOKEN": "tok"}, clear=False):
+        with patch("urllib.request.urlopen", side_effect=capture):
+            result = scan_color_accessibility("FILEKEY", node_id="1:0")
+
+    assert any("nodes" in url for url in captured)
+    assert "violations" in result
+    assert result["checked_pairs"] == 0
+
+
+@pytest.mark.unit
+def test_scan_color_accessibility_high_contrast_compliant_pair():
+    """scan_color_accessibility counts high-contrast pairs in compliant_count."""
+    high_contrast_doc = {
+        "document": {
+            "id": "0:0",
+            "type": "DOCUMENT",
+            "name": "Doc",
+            "children": [
+                {
+                    "id": "1:0",
+                    "type": "FRAME",
+                    "name": "Frame",
+                    "fills": [
+                        {
+                            "type": "SOLID",
+                            "visible": True,
+                            "color": {"r": 1.0, "g": 1.0, "b": 1.0},
+                        }
+                    ],
+                    "children": [
+                        {
+                            "id": "1:1",
+                            "type": "TEXT",
+                            "name": "Label",
+                            "fills": [
+                                {
+                                    "type": "SOLID",
+                                    "visible": True,
+                                    "color": {"r": 0.0, "g": 0.0, "b": 0.0},
+                                }
+                            ],
+                            "children": [],
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    mock_resp = make_mock_response(high_contrast_doc)
+
+    with patch.dict(os.environ, {"FIGMA_ACCESS_TOKEN": "tok"}, clear=False):
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = scan_color_accessibility("FILEKEY")
+
+    assert result["checked_pairs"] == 1
+    assert result["violation_count"] == 0
+    assert result["compliant_count"] == 1
+
+
+@pytest.mark.unit
 def test_scan_color_accessibility_compliant_pair():
     """TEXT node with no fill of its own uses the parent bg; a frame bg is checked.
 
@@ -309,3 +390,99 @@ def test_scan_color_accessibility_compliant_pair():
     assert result["checked_pairs"] == 0
     assert result["violation_count"] == 0
     assert result["compliant_count"] == 0
+
+
+@pytest.mark.unit
+def test_scan_color_accessibility_invisible_fill_not_used_as_bg():
+    """Frame with an invisible fill has no effective background; TEXT is not checked."""
+    doc_invisible_fill = {
+        "document": {
+            "id": "0:0",
+            "type": "DOCUMENT",
+            "name": "Doc",
+            "children": [
+                {
+                    "id": "1:0",
+                    "type": "FRAME",
+                    "name": "Frame",
+                    "fills": [
+                        {
+                            "type": "SOLID",
+                            "visible": False,
+                            "color": {"r": 1.0, "g": 1.0, "b": 1.0},
+                        }
+                    ],
+                    "children": [
+                        {
+                            "id": "1:1",
+                            "type": "TEXT",
+                            "name": "Label",
+                            "fills": [
+                                {
+                                    "type": "SOLID",
+                                    "visible": True,
+                                    "color": {"r": 0.0, "g": 0.0, "b": 0.0},
+                                }
+                            ],
+                            "children": [],
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    mock_resp = make_mock_response(doc_invisible_fill)
+
+    with patch.dict(os.environ, {"FIGMA_ACCESS_TOKEN": "tok"}, clear=False):
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = scan_color_accessibility("FILEKEY")
+
+    assert result["checked_pairs"] == 0
+
+
+@pytest.mark.unit
+def test_scan_color_accessibility_fill_with_empty_color_skipped():
+    """A SOLID visible fill with empty color dict does not produce a background."""
+    doc_empty_color = {
+        "document": {
+            "id": "0:0",
+            "type": "DOCUMENT",
+            "name": "Doc",
+            "children": [
+                {
+                    "id": "1:0",
+                    "type": "FRAME",
+                    "name": "Frame",
+                    "fills": [
+                        {
+                            "type": "SOLID",
+                            "visible": True,
+                            "color": {},
+                        }
+                    ],
+                    "children": [
+                        {
+                            "id": "1:1",
+                            "type": "TEXT",
+                            "name": "Label",
+                            "fills": [
+                                {
+                                    "type": "SOLID",
+                                    "visible": True,
+                                    "color": {"r": 0.0, "g": 0.0, "b": 0.0},
+                                }
+                            ],
+                            "children": [],
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    mock_resp = make_mock_response(doc_empty_color)
+
+    with patch.dict(os.environ, {"FIGMA_ACCESS_TOKEN": "tok"}, clear=False):
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = scan_color_accessibility("FILEKEY")
+
+    assert result["checked_pairs"] == 0

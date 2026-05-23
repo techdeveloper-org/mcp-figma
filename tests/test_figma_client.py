@@ -73,6 +73,27 @@ def test_parse_file_key_strips_whitespace():
     assert key == "rawkey"
 
 
+@pytest.mark.unit
+def test_parse_file_key_http_url_no_file_or_design_segment_raises():
+    """_parse_file_key raises ValueError for an http URL with no file/design segment."""
+    with pytest.raises(ValueError):
+        _parse_file_key("https://www.figma.com/proto/ABC123/Design")
+
+
+@pytest.mark.unit
+def test_parse_file_key_url_with_empty_candidate_after_file_raises():
+    """_parse_file_key raises ValueError when the segment after 'file' is empty."""
+    with pytest.raises(ValueError):
+        _parse_file_key("https://figma.com/file/")
+
+
+@pytest.mark.unit
+def test_parse_file_key_invalid_chars_in_url_segment_raises():
+    """_parse_file_key raises ValueError when URL segment contains invalid chars."""
+    with pytest.raises(ValueError):
+        _parse_file_key("https://figma.com/file/has%20spaces/My-Doc")
+
+
 # ---------------------------------------------------------------------------
 # _get_token
 # ---------------------------------------------------------------------------
@@ -181,6 +202,21 @@ def test_make_request_http_error_raises_runtime_error():
         with patch("urllib.request.urlopen", side_effect=http_err):
             with pytest.raises(RuntimeError, match="404"):
                 make_request("/v1/files/MISSING")
+
+
+@pytest.mark.unit
+def test_make_request_non_json_http_error_body_raises_runtime_error():
+    """make_request handles non-JSON HTTP error body (covers except Exception branch)."""
+    err_fp = MagicMock()
+    err_fp.read.return_value = b"plain text error - not JSON"
+    http_err = urllib.error.HTTPError(
+        url="", code=500, msg="Internal Server Error", hdrs={}, fp=err_fp
+    )
+
+    with patch.dict(os.environ, {"FIGMA_ACCESS_TOKEN": "tok"}, clear=False):
+        with patch("urllib.request.urlopen", side_effect=http_err):
+            with pytest.raises(RuntimeError, match="500"):
+                make_request("/v1/files/SOMEKEY")
 
 
 @pytest.mark.unit
@@ -302,3 +338,18 @@ def test_generate_pkce_challenge_uniqueness():
     """10 consecutive calls produce distinct code_verifier values."""
     verifiers = [generate_pkce_challenge()["code_verifier"] for _ in range(10)]
     assert len(set(verifiers)) == 10
+
+
+@pytest.mark.unit
+def test_make_request_with_body_sends_json():
+    """make_request serializes body dict to JSON bytes (covers line 132)."""
+    response_data = {"status": "ok"}
+    mock_resp = make_mock_response(response_data)
+
+    with patch.dict(os.environ, {"FIGMA_ACCESS_TOKEN": "tok"}, clear=False):
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            result, _ = make_request("/v1/files/ABC/comments", method="POST", body={"message": "hi"})
+
+    assert result == response_data
+    req_arg = mock_open.call_args[0][0]
+    assert req_arg.data == b'{"message": "hi"}'

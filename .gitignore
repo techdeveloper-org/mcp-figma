@@ -17,3 +17,13 @@ build/
 *.jsonl
 sessions/
 .qdrant/
+.coverage
+coverage.xml
+
+# Orchestration build artifacts (ephemeral, not repo content)
+execution_state.md
+orchestration_prompt_*.md
+module_architecture_blueprint.md
+module_stubs_architecture.md
+consensus_verdict.md
+context_delivery_plan.md

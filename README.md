@@ -21,10 +21,39 @@ Figma design-to-code MCP server for Claude Code. Connects Claude to the Figma RE
 - Read all design review comments with open/resolved breakdown
 - Post implementation or review comments anchored to specific frames
 - Health check to verify API token and connectivity
+- Full design variable CRUD: collections, variables, aliases, batch updates, team library publishing
+- Webhook lifecycle management with HMAC-SHA256 signature verification
+- APCA Lc and WCAG 2.1 contrast computation with accessible color pair search
+- DTCG-format token extraction, validation, diffing (Levenshtein rename detection), and alias resolution
+- Platform-specific token output: Android XML, iOS Swift, CSS custom properties, fluid typography
+- Component code generation: React, SwiftUI, Android XML, CSS, Flutter from Figma frames
+- Visual regression via perceptual hash (pHash) and Hamming distance comparison
+- Semantic version bump computation from two DTCG token snapshots
+
+---
+
+## Architecture
+
+mcp-figma exposes 47 tools across 8 domain modules, all registered in a single `server.py` entry point:
+
+| Module | Tools | Purpose |
+|--------|-------|---------|
+| `server.py` | 10 | Core tools: file info, nodes, styles, components, tokens, layout, export, comments, health |
+| `figma_variables.py` | 8 | Design variable CRUD, alias resolution, batch updates, collection publishing |
+| `figma_webhooks.py` | 5 | Webhook lifecycle management with HMAC-SHA256 signature verification |
+| `figma_accessibility.py` | 3 | APCA Lc and WCAG 2.1 contrast computation, accessible color pair search |
+| `figma_tokens.py` | 6 | DTCG token extraction, validation, diffing, alias resolution, platform transforms |
+| `figma_multiplatform.py` | 5 | Android XML, iOS Swift, CSS custom properties, fluid typography, type scale |
+| `figma_codegen.py` | 6 | React, SwiftUI, Android, CSS, Flutter component stubs from Figma frames |
+| `figma_visual.py` | 4 | Perceptual hash (pHash), Hamming distance, semver bump, version history |
+
+All tools communicate over stdio using the MCP protocol. No HTTP server is started.
 
 ---
 
 ## Tool Reference
+
+### Core Tools (10)
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
@@ -34,10 +63,82 @@ Figma design-to-code MCP server for Claude Code. Connects Claude to the Figma RE
 | `figma_get_components` | List all published components and component sets with containing frame info | `file_key` |
 | `figma_extract_design_tokens` | Extract design tokens: colors, typography, spacing, radii, shadows | `file_key`, `node_ids` (optional) |
 | `figma_get_frame_layout` | Get auto-layout / flexbox properties for a frame node | `file_key`, `node_id` |
-| `figma_export_image` | Export a node as PNG, SVG, JPG, or PDF and return a CDN URL | `file_key`, `node_id`, `format` (default `png`), `scale` (default `2`) |
+| `figma_export_image` | Export a node as PNG, SVG, JPG, or PDF and return a CDN URL | `file_key`, `node_id`, `format`, `scale` |
 | `figma_get_comments` | Get all design review comments with open/resolved counts | `file_key` |
 | `figma_add_comment` | Post an implementation or review comment, optionally anchored to a node | `file_key`, `message`, `node_id` (optional) |
-| `figma_health_check` | Verify API connectivity and token validity via GET /v1/me | — |
+| `figma_health_check` | Verify API connectivity and token validity via GET /v1/me | -- |
+
+### Variable Tools (8)
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `figma_get_variable_collections` | List all variable collections in a Figma file | `file_key` |
+| `figma_get_variables` | Get all variables in a collection with resolved values | `file_key`, `collection_id` |
+| `figma_set_variable_value` | Set a variable value for a specific mode | `file_key`, `variable_id`, `mode_id`, `value` |
+| `figma_create_variable` | Create a new design variable in a collection | `file_key`, `collection_id`, `name`, `resolved_type` |
+| `figma_resolve_variable_alias` | Resolve a variable alias to its underlying value | `file_key`, `variable_id` |
+| `figma_get_local_variables` | Fetch all local variables from the REST API | `file_key` |
+| `figma_publish_variable_collection` | Publish a variable collection to team library | `file_key`, `collection_id` |
+| `figma_batch_update_variables` | Batch-update multiple variable values atomically | `file_key`, `updates` |
+
+### Webhook Tools (5)
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `figma_create_webhook` | Register a webhook for Figma file events | `team_id`, `event_type`, `endpoint`, `passcode` |
+| `figma_list_webhooks` | List all webhooks for the current team | `team_id` |
+| `figma_delete_webhook` | Delete a registered webhook by ID | `webhook_id` |
+| `figma_get_webhook_events` | Retrieve recent events delivered to a webhook | `webhook_id` |
+| `figma_verify_webhook_signature` | Verify HMAC-SHA256 webhook payload signature | `payload`, `signature`, `passcode` |
+
+### Accessibility Tools (3)
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `compute_apca_contrast` | Compute APCA Lc contrast (APCA 0.0.98G coefficients) | `text_color`, `bg_color` |
+| `compute_wcag_contrast` | Compute WCAG 2.1 contrast ratio via relative luminance | `color_a`, `color_b` |
+| `get_accessible_color_pairs` | Find accessible foreground/background color pairs from a palette | `colors`, `min_contrast` |
+
+### Token Tools (6)
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `extract_dtcg_tokens` | Extract DTCG-format design tokens from a Figma file | `file_key` |
+| `validate_token_schema` | Validate a token set against the DTCG W3C specification | `tokens` |
+| `diff_token_sets` | Compute diff between two token sets with Levenshtein rename detection | `old_tokens`, `new_tokens` |
+| `resolve_token_aliases` | Resolve alias chains in a token set using Kahn topological sort | `tokens` |
+| `generate_token_transforms` | Generate platform-specific token transforms (CSS, Android, iOS) | `tokens`, `platform` |
+| `export_tokens_dtcg` | Export resolved tokens in DTCG JSON format | `tokens` |
+
+### Multiplatform Tools (5)
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `generate_android_tokens` | Generate Android XML resources from design tokens | `tokens` |
+| `generate_ios_tokens` | Generate Swift/Objective-C token constants from design tokens | `tokens` |
+| `generate_css_tokens` | Generate CSS custom properties from design tokens | `tokens` |
+| `generate_fluid_typography` | Generate fluid type scale with CSS clamp() expressions | `min_size`, `max_size`, `min_vw`, `max_vw` |
+| `generate_type_scale` | Generate a modular type scale from a base size and ratio | `base_size`, `ratio`, `steps` |
+
+### Code Generation Tools (6)
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `generate_react_component` | Generate a React component stub from a Figma frame | `file_key`, `node_id` |
+| `generate_swift_component` | Generate a SwiftUI view stub from a Figma frame | `file_key`, `node_id` |
+| `generate_android_component` | Generate an Android XML layout from a Figma frame | `file_key`, `node_id` |
+| `generate_css_from_frame` | Generate CSS styles from a Figma frame's properties | `file_key`, `node_id` |
+| `generate_flutter_component` | Generate a Flutter widget stub from a Figma frame | `file_key`, `node_id` |
+| `get_codegen_context` | Extract structured codegen context from a Figma node | `file_key`, `node_id` |
+
+### Visual Regression Tools (4)
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `compute_phash` | Compute a perceptual hash (pHash) of a Figma CDN image URL (SSRF-safe) | `image_url` |
+| `compare_phash_hamming` | Compare two pHash digests using Hamming distance | `hash_a`, `hash_b` |
+| `bump_token_semver` | Compute semantic version bump from two DTCG token snapshots | `old_tokens`, `new_tokens` |
+| `get_file_version_history` | Retrieve version history for a Figma file | `file_key` |
 
 ---
 
@@ -213,20 +314,29 @@ This lifecycle ensures design intent flows from Figma into the codebase without 
 
 ---
 
-## Architecture
+## File Structure
 
 ```
 mcp-figma/
-+-- server.py          # FastMCP server: 10 tools, stdlib urllib only, stdio transport
-+-- base/              # Shared mcp-base package copy (MCPResponse, @mcp_tool_handler)
-+-- input_validator.py # Input validation utilities
-+-- mcp_errors.py      # MCP error types
-+-- rate_limiter.py    # Token bucket rate limiting
-+-- requirements.txt   # Pinned dependencies
++-- server.py                 # FastMCP server: all 47 tools registered, stdio transport
++-- figma_client.py           # HTTP client (ETag, PKCE, pagination, retry backoff)
++-- figma_variables.py        # 8 variable tools
++-- figma_webhooks.py         # 5 webhook tools (HMAC-SHA256 verification)
++-- figma_accessibility.py    # 3 accessibility tools (APCA 0.0.98G, WCAG 2.1)
++-- figma_tokens.py           # 6 token tools (DTCG, Kahn sort, Levenshtein diff)
++-- figma_multiplatform.py    # 5 multiplatform tools (Android/iOS/CSS/fluid)
++-- figma_codegen.py          # 6 codegen tools (React/SwiftUI/Android/CSS/Flutter)
++-- figma_visual.py           # 4 visual regression tools (pHash, semver)
++-- base/                     # Shared mcp-base package copy (MCPResponse, @mcp_tool_handler)
++-- input_validator.py        # Input validation utilities
++-- mcp_errors.py             # Structured MCP error types
++-- rate_limiter.py           # Token bucket rate limiting
++-- tests/                    # Test suite: 202 unit + 14 integration + 22 e2e tests
++-- requirements.txt          # Pinned dependencies
 +-- README.md
 ```
 
-The server uses `urllib.request` exclusively for all HTTP calls — no `httpx`, `requests`, or other HTTP client libraries. All JSON-RPC communication with Claude Code happens over stdio.
+The server uses `urllib.request` exclusively for all HTTP calls -- no `httpx`, `requests`, or other HTTP client libraries. All JSON-RPC communication with Claude Code happens over stdio.
 
 The `base/` directory is a copy of the shared [mcp-base](https://github.com/techdeveloper-org/mcp-base) package, which provides the `@mcp_tool_handler` decorator for uniform error handling and `MCPResponse` for consistent response shaping across all 13 MCP servers in the ecosystem.
 

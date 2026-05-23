@@ -3,15 +3,36 @@ Figma MCP Server - FastMCP-based Figma REST API integration for Claude Code.
 
 Fetches file metadata, nodes, styles, components, design tokens, layout
 properties, image export URLs, and comments from the Figma REST API.
+Extends to Variables, Webhooks, Accessibility, Tokens, Multiplatform,
+Codegen, and Visual regression (47 tools total).
 
 Backend: urllib.request (stdlib only, no external deps)
 Transport: stdio
 
-Tools (10):
-  figma_get_file_info, figma_get_node, figma_get_styles,
-  figma_get_components, figma_extract_design_tokens, figma_get_frame_layout,
-  figma_export_image, figma_get_comments, figma_add_comment,
-  figma_health_check
+Tools (47):
+  Core (10): figma_get_file_info, figma_get_node, figma_get_styles,
+    figma_get_components, figma_extract_design_tokens, figma_get_frame_layout,
+    figma_export_image, figma_get_comments, figma_add_comment,
+    figma_health_check
+  Variables (8): figma_list_variable_collections, figma_list_variables,
+    figma_get_variable, figma_create_variable, figma_update_variable,
+    figma_delete_variable, figma_batch_update_variables,
+    figma_publish_variable_library
+  Webhooks (5): figma_list_webhooks, figma_create_webhook,
+    figma_update_webhook, figma_delete_webhook, figma_verify_webhook_signature
+  Accessibility (3): figma_compute_apca_contrast, figma_compute_wcag_contrast,
+    figma_scan_color_accessibility
+  Tokens (6): figma_export_dtcg_tokens, figma_extract_oklch_colors,
+    figma_generate_type_scale, figma_resolve_token_aliases,
+    figma_tokens_to_css_vars, figma_diff_token_versions
+  Multiplatform (5): figma_tokens_to_android, figma_tokens_to_ios,
+    figma_tokens_to_css_rem, figma_dark_mode_token_pairs,
+    figma_fluid_typography_clamp
+  Codegen (6): figma_layout_to_flexbox, figma_layout_to_css_grid,
+    figma_get_variant_matrix, figma_generate_react_interface,
+    figma_generate_css_component, figma_get_code_connect_annotations
+  Visual (4): figma_compute_phash, figma_compare_phash_hamming,
+    figma_bump_token_semver, figma_get_file_version_history
 
 Environment Variables:
   FIGMA_ACCESS_TOKEN - Personal Access Token (required)
@@ -38,42 +59,37 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mcp.server.fastmcp import FastMCP
 from base.decorators import mcp_tool_handler
 
+from input_validator import validate_input
+
+import figma_client
+import figma_variables
+import figma_webhooks
+import figma_accessibility
+import figma_tokens
+import figma_multiplatform
+import figma_codegen
+import figma_visual
+
 mcp = FastMCP(
     "figma-api",
     instructions="Figma design file operations via REST API"
 )
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Local shims - delegate to figma_client for backward compatibility
 # ---------------------------------------------------------------------------
 
-_TIMEOUT = 30  # seconds for all HTTP calls
-_FIGMA_BASE_URL = "https://api.figma.com"
-
-
 def _get_token() -> str:
-    """Read and validate the Figma Personal Access Token from environment.
+    """Delegate to figma_client._get_token for backward compatibility.
 
     Returns:
-        Token string.
-
-    Raises:
-        EnvironmentError: If FIGMA_ACCESS_TOKEN is not set.
+        Token string from environment.
     """
-    token = os.environ.get("FIGMA_ACCESS_TOKEN", "").strip()
-    if not token:
-        raise EnvironmentError(
-            "Missing required environment variable: FIGMA_ACCESS_TOKEN. "
-            "Set it to your Figma Personal Access Token before using figma_* tools."
-        )
-    return token
+    return figma_client._get_token()
 
 
 def _parse_file_key(file_key_or_url: str) -> str:
-    """Extract a Figma file key from a URL or return it directly.
-
-    Handles both raw file keys (e.g. ``AbCdEfGhIjKl``) and full Figma URLs
-    (e.g. ``https://www.figma.com/file/AbCdEfGhIjKl/...``).
+    """Delegate to figma_client._parse_file_key for backward compatibility.
 
     Args:
         file_key_or_url: Raw file key or full Figma file URL.
@@ -81,22 +97,8 @@ def _parse_file_key(file_key_or_url: str) -> str:
     Returns:
         Extracted or unchanged file key string.
     """
-    stripped = file_key_or_url.strip()
-    if stripped.startswith("http"):
-        # https://www.figma.com/file/<KEY>/Title or
-        # https://www.figma.com/design/<KEY>/Title
-        parts = stripped.split("/")
-        for i, part in enumerate(parts):
-            if part in ("file", "design") and i + 1 < len(parts):
-                candidate = parts[i + 1].split("?")[0].split("#")[0]
-                if candidate:
-                    return candidate
-    return stripped
+    return figma_client._parse_file_key(file_key_or_url)
 
-
-# ---------------------------------------------------------------------------
-# HTTP helper
-# ---------------------------------------------------------------------------
 
 def _make_figma_request(
     endpoint: str,
@@ -104,7 +106,7 @@ def _make_figma_request(
     method: str = "GET",
     body: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Execute a GET or POST request against the Figma REST API.
+    """Delegate to figma_client.make_request, returning only the response dict.
 
     Args:
         endpoint: API path starting with / (e.g. /v1/files/KEY).
@@ -114,47 +116,14 @@ def _make_figma_request(
 
     Returns:
         Parsed JSON response dict.
-
-    Raises:
-        EnvironmentError: If FIGMA_ACCESS_TOKEN is missing.
-        RuntimeError: On HTTP or network errors.
     """
-    token = _get_token()
-
-    url = _FIGMA_BASE_URL + endpoint
-    if params:
-        url += "?" + urllib.parse.urlencode(params)
-
-    headers = {
-        "X-Figma-Token": token,
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-    }
-
-    data: Optional[bytes] = None
-    if body is not None:
-        data = json.dumps(body).encode("utf-8")
-
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-
-    try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-            raw = resp.read()
-            if not raw:
-                return {}
-            return json.loads(raw.decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        raw_body = exc.read()
-        try:
-            err_json = json.loads(raw_body.decode("utf-8"))
-            detail = err_json.get("err", "") or err_json.get("message", "") or str(exc)
-        except Exception:
-            detail = raw_body.decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(
-            "Figma API error " + str(exc.code) + ": " + detail
-        ) from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError("Figma network error: " + str(exc.reason)) from exc
+    response_dict, _etag = figma_client.make_request(
+        endpoint,
+        params=params,
+        method=method,
+        body=body,
+    )
+    return response_dict
 
 
 # ---------------------------------------------------------------------------
@@ -680,6 +649,7 @@ def figma_add_comment(
         node_id: Optional node ID to anchor the comment to a specific frame.
     """
     key = _parse_file_key(file_key)
+    message = validate_input(message, max_length=2000, field_name="message")
 
     body: Dict[str, Any] = {"message": message}
     if node_id:
@@ -727,6 +697,673 @@ def figma_health_check() -> dict:
         "team_id": team_id,
         "enable_figma": os.environ.get("ENABLE_FIGMA", "0"),
     }
+
+
+# ---------------------------------------------------------------------------
+# Variables tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_list_variable_collections(file_key: str) -> dict:
+    """List all variable collections defined in a Figma file.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+    """
+    return figma_variables.list_variable_collections(figma_client._parse_file_key(file_key))
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_list_variables(
+    file_key: str,
+    collection_id: Optional[str] = None,
+) -> dict:
+    """List all variables in a Figma file, optionally filtered by collection.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        collection_id: Optional collection ID to filter results.
+    """
+    return figma_variables.list_variables(
+        figma_client._parse_file_key(file_key),
+        collection_id=collection_id,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_get_variable(file_key: str, variable_id: str) -> dict:
+    """Retrieve a single variable by its ID from a Figma file.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        variable_id: Unique variable ID string.
+    """
+    return figma_variables.get_variable(
+        figma_client._parse_file_key(file_key),
+        variable_id,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_create_variable(
+    file_key: str,
+    collection_id: str,
+    name: str,
+    var_type: str,
+    value: Any,
+) -> dict:
+    """Create a new variable in the specified Figma collection.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        collection_id: Target variable collection ID.
+        name: Display name for the new variable.
+        var_type: Variable type (COLOR, FLOAT, STRING, BOOLEAN).
+        value: Initial value for the default mode.
+    """
+    return figma_variables.create_variable(
+        figma_client._parse_file_key(file_key),
+        collection_id,
+        name,
+        var_type,
+        value,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_update_variable(
+    file_key: str,
+    variable_id: str,
+    value: Any,
+    mode_id: Optional[str] = None,
+) -> dict:
+    """Update the value of an existing Figma variable.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        variable_id: Unique variable ID to update.
+        value: New value to set.
+        mode_id: Optional mode ID; uses default mode when None.
+    """
+    return figma_variables.update_variable(
+        figma_client._parse_file_key(file_key),
+        variable_id,
+        value,
+        mode_id=mode_id,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_delete_variable(file_key: str, variable_id: str) -> dict:
+    """Delete a variable from a Figma file.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        variable_id: Unique variable ID to delete.
+    """
+    return figma_variables.delete_variable(
+        figma_client._parse_file_key(file_key),
+        variable_id,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_batch_update_variables(
+    file_key: str,
+    mutations: List[Dict[str, Any]],
+) -> dict:
+    """Apply a batch of variable mutations in a single Figma API call.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        mutations: List of mutation dicts describing variable changes.
+    """
+    return figma_variables.batch_update_variables(
+        figma_client._parse_file_key(file_key),
+        mutations,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_publish_variable_library(file_key: str) -> dict:
+    """Publish the variable library so consumers can subscribe.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+    """
+    return figma_variables.publish_variable_library(
+        figma_client._parse_file_key(file_key)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Webhooks tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_list_webhooks(team_id: str) -> dict:
+    """List all webhooks registered for a Figma team.
+
+    Args:
+        team_id: Figma team ID string.
+    """
+    return figma_webhooks.list_webhooks(team_id)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_create_webhook(
+    team_id: str,
+    event_type: str,
+    endpoint: str,
+    passcode: str,
+    description: Optional[str] = None,
+) -> dict:
+    """Register a new Figma webhook for a specific event type on a team.
+
+    Args:
+        team_id: Figma team ID string.
+        event_type: Event type to subscribe to (e.g. FILE_UPDATE, COMMENT).
+        endpoint: HTTPS URL that Figma will POST payloads to.
+        passcode: Secret passcode sent with each payload for verification.
+        description: Optional human-readable description.
+    """
+    return figma_webhooks.create_webhook(
+        team_id,
+        event_type,
+        endpoint,
+        passcode,
+        description=description,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_update_webhook(
+    webhook_id: str,
+    endpoint: Optional[str] = None,
+    passcode: Optional[str] = None,
+    status: Optional[str] = None,
+) -> dict:
+    """Update an existing Figma webhook's endpoint, passcode, or status.
+
+    Args:
+        webhook_id: Unique webhook ID to update.
+        endpoint: New delivery URL; unchanged when None.
+        passcode: New secret passcode; unchanged when None.
+        status: New status (ACTIVE or PAUSED); unchanged when None.
+    """
+    return figma_webhooks.update_webhook(
+        webhook_id,
+        endpoint=endpoint,
+        passcode=passcode,
+        status=status,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_delete_webhook(webhook_id: str) -> dict:
+    """Delete a Figma webhook by its ID.
+
+    Args:
+        webhook_id: Unique webhook ID to delete.
+    """
+    return figma_webhooks.delete_webhook(webhook_id)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_verify_webhook_signature(
+    payload: str,
+    signature: str,
+    secret: str,
+) -> dict:
+    """Verify a Figma webhook payload signature using HMAC-SHA256.
+
+    Args:
+        payload: Raw request body string received from Figma.
+        signature: Signature header value sent by Figma (hex digest).
+        secret: Shared secret (passcode) configured for the webhook.
+    """
+    return figma_webhooks.verify_webhook_signature(payload, signature, secret)
+
+
+# ---------------------------------------------------------------------------
+# Accessibility tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_compute_apca_contrast(
+    text_color_hex: str,
+    bg_color_hex: str,
+) -> dict:
+    """Compute APCA Lc contrast between a text color and background color.
+
+    Args:
+        text_color_hex: Text color as 6-digit hex string (with or without #).
+        bg_color_hex: Background color as 6-digit hex string.
+    """
+    return figma_accessibility.compute_apca_contrast(text_color_hex, bg_color_hex)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_compute_wcag_contrast(
+    color1_hex: str,
+    color2_hex: str,
+) -> dict:
+    """Compute WCAG 2.1 contrast ratio between two colors.
+
+    Args:
+        color1_hex: First color as 6-digit hex string (with or without #).
+        color2_hex: Second color as 6-digit hex string.
+    """
+    return figma_accessibility.compute_wcag_contrast(color1_hex, color2_hex)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_scan_color_accessibility(
+    file_key: str,
+    node_id: Optional[str] = None,
+) -> dict:
+    """Scan a Figma file for color accessibility violations (WCAG + APCA).
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        node_id: Optional node ID to scope the scan to a subtree.
+    """
+    return figma_accessibility.scan_color_accessibility(
+        figma_client._parse_file_key(file_key),
+        node_id=node_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tokens tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_export_dtcg_tokens(
+    file_key: str,
+    token_source: str = "nodes",
+    node_ids: Optional[str] = None,
+) -> dict:
+    """Export design tokens from a Figma file in DTCG W3C format.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        token_source: Source strategy - "nodes" or "variables".
+        node_ids: Optional comma-separated node IDs to scope extraction.
+    """
+    return figma_tokens.export_dtcg_tokens(
+        figma_client._parse_file_key(file_key),
+        token_source=token_source,
+        node_ids=node_ids,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_extract_oklch_colors(
+    file_key: str,
+    node_ids: Optional[str] = None,
+) -> dict:
+    """Extract all solid fill colors from a Figma file as oklch values.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        node_ids: Optional comma-separated node IDs to scope extraction.
+    """
+    return figma_tokens.extract_oklch_colors(
+        figma_client._parse_file_key(file_key),
+        node_ids=node_ids,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_generate_type_scale(
+    base_size_px: int = 16,
+    scale_ratio: float = 1.25,
+    steps: int = 10,
+) -> dict:
+    """Generate a modular typographic scale from a base size and ratio.
+
+    Args:
+        base_size_px: Base font size in pixels. Default 16.
+        scale_ratio: Multiplier between adjacent steps. Default 1.25.
+        steps: Total number of scale steps. Default 10.
+    """
+    return figma_tokens.generate_type_scale(
+        base_size_px=base_size_px,
+        scale_ratio=scale_ratio,
+        steps=steps,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_resolve_token_aliases(dtcg_tokens: Dict[str, Any]) -> dict:
+    """Resolve all alias references in a DTCG token tree to concrete values.
+
+    Args:
+        dtcg_tokens: Nested DTCG token dict with possible alias $value strings.
+    """
+    return figma_tokens.resolve_token_aliases(dtcg_tokens)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_tokens_to_css_vars(
+    dtcg_tokens: Dict[str, Any],
+    prefix: str = "--",
+) -> dict:
+    """Convert a DTCG token tree to CSS custom property declarations.
+
+    Args:
+        dtcg_tokens: Nested DTCG token dict.
+        prefix: CSS variable prefix string. Default "--".
+    """
+    return figma_tokens.tokens_to_css_vars(dtcg_tokens, prefix=prefix)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_diff_token_versions(
+    prev_dtcg: Dict[str, Any],
+    curr_dtcg: Dict[str, Any],
+) -> dict:
+    """Compute the diff between two DTCG token snapshots.
+
+    Args:
+        prev_dtcg: Previous DTCG token dict (baseline).
+        curr_dtcg: Current DTCG token dict (updated state).
+    """
+    return figma_tokens.diff_token_versions(prev_dtcg, curr_dtcg)
+
+
+# ---------------------------------------------------------------------------
+# Multiplatform tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_tokens_to_android(
+    dtcg_tokens: Dict[str, Any],
+    density: float = 2.0,
+) -> dict:
+    """Convert DTCG tokens to Android resource XML strings.
+
+    Args:
+        dtcg_tokens: Nested DTCG token dict.
+        density: Screen density multiplier for dp conversion. Default 2.0.
+    """
+    return figma_multiplatform.tokens_to_android(dtcg_tokens, density=density)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_tokens_to_ios(
+    dtcg_tokens: Dict[str, Any],
+    base_ppi: float = 163.0,
+    target_ppi: float = 326.0,
+) -> dict:
+    """Convert DTCG tokens to iOS Swift UIColor / CGFloat declarations.
+
+    Args:
+        dtcg_tokens: Nested DTCG token dict.
+        base_ppi: Source PPI for dimension tokens. Default 163.0.
+        target_ppi: Target device PPI. Default 326.0 (Retina 2x).
+    """
+    return figma_multiplatform.tokens_to_ios(
+        dtcg_tokens,
+        base_ppi=base_ppi,
+        target_ppi=target_ppi,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_tokens_to_css_rem(
+    dtcg_tokens: Dict[str, Any],
+    base_font_px: int = 16,
+) -> dict:
+    """Convert DTCG dimension tokens from px to rem.
+
+    Args:
+        dtcg_tokens: Nested DTCG token dict.
+        base_font_px: Root font size in pixels for rem calculation. Default 16.
+    """
+    return figma_multiplatform.tokens_to_css_rem(
+        dtcg_tokens,
+        base_font_px=base_font_px,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_dark_mode_token_pairs(dtcg_tokens: Dict[str, Any]) -> dict:
+    """Pair light and dark mode token values from a DTCG token tree.
+
+    Args:
+        dtcg_tokens: Nested DTCG token dict with light/dark variants.
+    """
+    return figma_multiplatform.dark_mode_token_pairs(dtcg_tokens)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_fluid_typography_clamp(
+    min_font_px: int,
+    max_font_px: int,
+    min_vw_px: int = 320,
+    max_vw_px: int = 1440,
+) -> dict:
+    """Generate a CSS clamp() expression for fluid responsive typography.
+
+    Args:
+        min_font_px: Minimum font size in pixels at min_vw_px.
+        max_font_px: Maximum font size in pixels at max_vw_px.
+        min_vw_px: Viewport width at which min size applies. Default 320.
+        max_vw_px: Viewport width at which max size applies. Default 1440.
+    """
+    return figma_multiplatform.fluid_typography_clamp(
+        min_font_px,
+        max_font_px,
+        min_vw_px=min_vw_px,
+        max_vw_px=max_vw_px,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Codegen tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_layout_to_flexbox(file_key: str, node_id: str) -> dict:
+    """Convert a Figma auto-layout node to CSS flexbox properties.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        node_id: Node ID of the auto-layout frame.
+    """
+    node = figma_codegen._fetch_node_for_codegen(
+        figma_client._parse_file_key(file_key),
+        node_id,
+    )
+    return figma_codegen.layout_to_flexbox(node)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_layout_to_css_grid(file_key: str, node_id: str) -> dict:
+    """Convert a Figma frame with grid guides to CSS grid properties.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        node_id: Node ID of the frame with layout grids.
+    """
+    node = figma_codegen._fetch_node_for_codegen(
+        figma_client._parse_file_key(file_key),
+        node_id,
+    )
+    return figma_codegen.layout_to_css_grid(node)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_get_variant_matrix(file_key: str, node_id: str) -> dict:
+    """Build a variant property matrix from a Figma component-set node.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        node_id: Node ID of the component-set.
+    """
+    node = figma_codegen._fetch_node_for_codegen(
+        figma_client._parse_file_key(file_key),
+        node_id,
+    )
+    return figma_codegen.get_variant_matrix(node)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_generate_react_interface(file_key: str, node_id: str) -> dict:
+    """Generate a TypeScript React props interface from a component-set.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        node_id: Node ID of the component-set.
+    """
+    node = figma_codegen._fetch_node_for_codegen(
+        figma_client._parse_file_key(file_key),
+        node_id,
+    )
+    return {"interface": figma_codegen.generate_react_interface(node)}
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_generate_css_component(
+    file_key: str,
+    node_id: str,
+    component_name: str,
+) -> dict:
+    """Generate a full CSS component block from a Figma frame node.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        node_id: Node ID of the frame to convert.
+        component_name: CSS class selector name (without the dot prefix).
+    """
+    node = figma_codegen._fetch_node_for_codegen(
+        figma_client._parse_file_key(file_key),
+        node_id,
+    )
+    return {"css": figma_codegen.generate_css_component(node, component_name)}
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_get_code_connect_annotations(
+    file_key: str,
+    node_id: str,
+) -> dict:
+    """Fetch Figma Code Connect annotations for a component node.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        node_id: Node ID of the component.
+    """
+    return figma_codegen.get_code_connect_annotations(
+        figma_client._parse_file_key(file_key),
+        node_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Visual regression tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_compute_phash(image_url: str) -> dict:
+    """Compute a 64-bit DCT perceptual hash of an image at the given URL.
+
+    Args:
+        image_url: HTTP/HTTPS URL of the image to hash (PNG, JPG, or SVG).
+    """
+    return {"phash": figma_visual.compute_phash(image_url)}
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_compare_phash_hamming(
+    hash1: str,
+    hash2: str,
+    threshold: int = 10,
+) -> dict:
+    """Compare two pHash hex strings using Hamming distance.
+
+    Args:
+        hash1: First 16-character hex pHash string.
+        hash2: Second 16-character hex pHash string.
+        threshold: Max Hamming distance to classify as similar. Default 10.
+    """
+    return figma_visual.compare_phash_hamming(hash1, hash2, threshold=threshold)
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_bump_token_semver(
+    prev_dtcg_json: str,
+    curr_dtcg_json: str,
+    current_version: str = "1.0.0",
+) -> dict:
+    """Determine the next semantic version based on design token changes.
+
+    Args:
+        prev_dtcg_json: JSON string of the previous DTCG token snapshot.
+        curr_dtcg_json: JSON string of the current DTCG token snapshot.
+        current_version: Current semver string (MAJOR.MINOR.PATCH).
+    """
+    return figma_visual.bump_token_semver(
+        prev_dtcg_json,
+        curr_dtcg_json,
+        current_version=current_version,
+    )
+
+
+@mcp.tool()
+@mcp_tool_handler
+def figma_get_file_version_history(
+    file_key: str,
+    page_size: int = 20,
+) -> dict:
+    """Fetch the version history of a Figma file.
+
+    Args:
+        file_key: Figma file key or full Figma file URL.
+        page_size: Maximum number of versions to return. Default 20.
+    """
+    return figma_visual.get_file_version_history(
+        figma_client._parse_file_key(file_key),
+        page_size=page_size,
+    )
 
 
 # ---------------------------------------------------------------------------

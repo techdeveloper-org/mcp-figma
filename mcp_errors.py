@@ -7,7 +7,6 @@ with existing callers outside the MCP server layer.
 """
 
 import json
-import traceback
 from datetime import datetime
 
 # Re-export from base for convenience
@@ -79,5 +78,4 @@ def mcp_safe_execute(func, error_type="INTERNAL_ERROR", fallback=None):
         return mcp_error_response(
             error_type=error_type,
             message=str(e),
-            details={"traceback": traceback.format_exc()[-500:]},
         )

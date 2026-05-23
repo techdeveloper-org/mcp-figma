@@ -7,8 +7,14 @@ is patched via the mock_figma_api fixture for all tests that need HTTP mocks.
 ASCII-only (cp1252 safe).
 """
 
-import json
 import os
+
+# Set env vars before any test files are imported (evaluated at collection time
+# by pytest.mark.skipif in integration tests).
+os.environ.setdefault("FIGMA_ACCESS_TOKEN", "test-mock-token")
+os.environ.setdefault("FIGMA_TEST_FILE_KEY", "testfilekey123")
+
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest

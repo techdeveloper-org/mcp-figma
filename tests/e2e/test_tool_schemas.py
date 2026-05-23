@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -47,6 +48,17 @@ def get_tools_list():
         except json.JSONDecodeError:
             continue
     return []
+
+
+@pytest.mark.unit
+def test_get_tools_list_handles_invalid_json_output():
+    """get_tools_list skips non-JSON lines and returns [] when no match (covers lines 47-49)."""
+    with patch("subprocess.Popen") as mock_popen:
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"not-json\n{broken\n", b"")
+        mock_popen.return_value = mock_proc
+        tools = get_tools_list()
+    assert tools == []
 
 
 @pytest.mark.e2e

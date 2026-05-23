@@ -57,6 +57,15 @@ def test_me_endpoint_returns_email(figma_token):
 
 
 @pytest.mark.integration
+def test_unrecognized_endpoint_returns_empty_dict():
+    """Confirm _mock_request_handler fallthrough returns ({}, None) (covers conftest line 40)."""
+    response, etag = figma_client.make_request("/v1/unrecognized/endpoint")
+    assert isinstance(response, dict)
+    assert response == {}
+    assert etag is None
+
+
+@pytest.mark.integration
 @_REQUIRES_TOKEN
 def test_make_request_returns_tuple(figma_token):
     """Confirm make_request always returns a (dict, optional_str) tuple.

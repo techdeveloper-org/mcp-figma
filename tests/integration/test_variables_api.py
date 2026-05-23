@@ -64,7 +64,7 @@ def test_list_variable_collections_meta_has_expected_keys(figma_token, test_file
     """
     result = figma_variables.list_variable_collections(test_file_key)
 
-    if "meta" not in result:
+    if "meta" not in result:  # pragma: no cover
         pytest.skip(
             "API returned a non-meta response (likely plan restriction); "
             "skipping structure assertion"

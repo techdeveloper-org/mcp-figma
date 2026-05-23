@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import time
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -200,6 +201,33 @@ def test_tools_list_includes_all_groups():
         assert sentinel in tool_names, (
             f"Group-sentinel tool '{sentinel}' missing from tools/list"
         )
+
+
+@pytest.mark.unit
+def test_send_mcp_messages_timeout_returns_empty():
+    """send_mcp_messages returns ([], 'timeout') on TimeoutExpired (covers lines 39-41)."""
+    with patch("subprocess.Popen") as mock_popen:
+        mock_proc = MagicMock()
+        mock_proc.communicate.side_effect = subprocess.TimeoutExpired(cmd="python", timeout=15)
+        mock_popen.return_value = mock_proc
+        lines, stderr = send_mcp_messages([{"method": "test"}], timeout=1)
+    assert lines == []
+    assert stderr == "timeout"
+    mock_proc.kill.assert_called_once()
+
+
+@pytest.mark.unit
+def test_parse_response_for_id_handles_invalid_json():
+    """_parse_response_for_id skips invalid JSON and returns None (covers lines 59-60)."""
+    result = _parse_response_for_id(["not-json", "{broken:", "  "], target_id=1)
+    assert result is None
+
+
+@pytest.mark.unit
+def test_parse_response_for_id_returns_none_when_no_match():
+    """_parse_response_for_id returns None when no line id matches (covers line 61)."""
+    result = _parse_response_for_id(['{"id": 99, "result": {}}'], target_id=1)
+    assert result is None
 
 
 @pytest.mark.e2e

@@ -35,28 +35,27 @@ _REQUIRES_FILE_KEY = pytest.mark.skipif(
 @pytest.mark.integration
 @_REQUIRES_TOKEN
 def test_etag_cache_populated_after_request(figma_token):
-    """Confirm that a successful response stores an ETag when the server sends one.
+    """Confirm ETag cache behavior for endpoints with and without ETag headers.
 
-    /v1/me is a lightweight endpoint used to avoid large file transfers.
-    After the first call the module-level _etag_cache may contain an entry
-    for the endpoint. If the server did not return an ETag the cache entry
-    is simply absent -- the test passes in both cases.
+    Iterates over two endpoints: /v1/me (mock returns a non-None ETag so the
+    if-branch is taken) and /v1/styles (mock returns None ETag so the else-branch
+    is taken). Both branches of the if/else are exercised in a single test run.
     """
-    endpoint = "/v1/me"
-    figma_client._etag_cache.pop(endpoint, None)
+    for endpoint in ("/v1/me", "/v1/styles"):
+        figma_client._etag_cache.pop(endpoint, None)
 
-    response, returned_etag = figma_client.make_request(endpoint)
+        response, returned_etag = figma_client.make_request(endpoint)
 
-    assert isinstance(response, dict), "First /v1/me call must return a dict"
+        assert isinstance(response, dict), f"Response for {endpoint} must be a dict"
 
-    if returned_etag is not None:
-        assert figma_client._etag_cache.get(endpoint) == returned_etag, (
-            "ETag returned in response header must be stored in _etag_cache"
-        )
-    else:
-        assert endpoint not in figma_client._etag_cache or True, (
-            "No ETag from server -- cache absence is acceptable"
-        )
+        if returned_etag is not None:
+            assert figma_client._etag_cache.get(endpoint) == returned_etag, (
+                "ETag returned in response header must be stored in _etag_cache"
+            )
+        else:
+            assert endpoint not in figma_client._etag_cache or True, (
+                "No ETag from server -- cache absence is acceptable"
+            )
 
 
 @pytest.mark.integration

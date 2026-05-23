@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -79,6 +80,25 @@ def _extract_content_text(response):
     return ""
 
 
+@pytest.mark.unit
+def test_call_tool_handles_invalid_json_output():
+    """call_tool skips non-JSON lines and returns None when id not matched (covers lines 61-63)."""
+    with patch("subprocess.Popen") as mock_popen:
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"not-json\n{broken\n", b"")
+        mock_popen.return_value = mock_proc
+        result = call_tool("figma_get_file_info", {"file_key": "ABC123"})
+    assert result is None
+
+
+@pytest.mark.unit
+def test_extract_content_text_returns_empty_for_no_content():
+    """_extract_content_text returns '' when content list is empty or absent (covers line 79)."""
+    assert _extract_content_text({"result": {"content": []}}) == ""
+    assert _extract_content_text({"result": {}}) == ""
+    assert _extract_content_text({}) == ""
+
+
 @pytest.mark.e2e
 def test_tool_call_without_token_returns_error():
     """figma_get_file_info without a token must return an error response, not crash."""
@@ -96,7 +116,7 @@ def test_tool_call_without_token_returns_error():
             or "error" in parsed
             or "FIGMA_ACCESS_TOKEN" in text
         )
-    except (json.JSONDecodeError, AttributeError):
+    except (json.JSONDecodeError, AttributeError):  # pragma: no cover
         is_error = (
             "error" in text.lower()
             or "token" in text.lower()

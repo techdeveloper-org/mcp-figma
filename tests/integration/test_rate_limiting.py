@@ -81,7 +81,7 @@ def test_10_rapid_requests_consistent_user_id(figma_token):
     user_ids = set()
     for _ in range(_REQUEST_COUNT):
         response, _etag = figma_client.make_request("/v1/me")
-        if "id" in response:
+        if "id" in response:  # pragma: no branch
             user_ids.add(response["id"])
 
     assert len(user_ids) == 1, (

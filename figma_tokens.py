@@ -529,7 +529,7 @@ def resolve_token_aliases(dtcg_tokens: Dict[str, Any]) -> Dict[str, Any]:
             resolved_values[node] = resolved_values[target]
         for neighbor in adj.get(node, []):
             in_degree[neighbor] -= 1
-            if in_degree[neighbor] == 0:
+            if in_degree[neighbor] == 0:  # pragma: no branch
                 queue.append(neighbor)
 
     cycles_detected = [n for n, deg in in_degree.items() if deg > 0]

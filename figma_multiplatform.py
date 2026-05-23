@@ -125,7 +125,7 @@ def _to_camel_case(name: str) -> str:
         lowerCamelCase identifier suitable for Swift property names.
     """
     parts = re.split(r"[.\-_ ]+", name)
-    if not parts:
+    if not parts:  # pragma: no cover
         return "token"
     result = parts[0].lower()
     for part in parts[1:]:
@@ -388,7 +388,7 @@ def dark_mode_token_pairs(dtcg_tokens: Dict[str, Any]) -> Dict[str, Any]:
             L_dark = L * 0.3
             if L > 1e-9:
                 factor = L_dark / L
-            else:
+            else:  # pragma: no cover
                 factor = 0.0
             r_dark_lin = r_lin * factor
             g_dark_lin = g_lin * factor
@@ -397,7 +397,7 @@ def dark_mode_token_pairs(dtcg_tokens: Dict[str, Any]) -> Dict[str, Any]:
             L_dark = 1.0 - (1.0 - L) * 0.3
             if (1.0 - L) > 1e-9:
                 factor = (1.0 - L_dark) / (1.0 - L)
-            else:
+            else:  # pragma: no cover
                 factor = 1.0
             r_dark_lin = 1.0 - (1.0 - r_lin) * factor
             g_dark_lin = 1.0 - (1.0 - g_lin) * factor

@@ -169,13 +169,13 @@ def scan_color_accessibility(
         node_bg_hex = _first_solid_fill_hex(fills) if fills else None
         effective_bg = node_bg_hex or parent_bg_hex
 
-        if node_type == "TEXT" and effective_bg:
+        if node_type == "TEXT" and parent_bg_hex:
             text_hex = _first_solid_fill_hex(fills)
             if text_hex:
                 pair = {
                     "node_id": node.get("id", ""),
                     "text_color": text_hex,
-                    "bg_color": effective_bg,
+                    "bg_color": parent_bg_hex,
                 }
                 results.append(pair)
 

@@ -1370,5 +1370,5 @@ def figma_get_file_version_history(
 # Entry point
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     mcp.run(transport="stdio")

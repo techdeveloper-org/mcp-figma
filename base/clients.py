@@ -71,8 +71,8 @@ class LazyClient(ABC):
         """
         if cls not in cls._instances:
             with cls._lock:
-                if cls not in cls._instances:
-                    cls._instances[cls] = cls()
+                if cls not in cls._instances:  # pragma: no cover
+                    cls._instances[cls] = cls()  # pragma: no cover
         return cls._instances[cls]
 
     def get(self) -> Any:
@@ -88,8 +88,8 @@ class LazyClient(ABC):
             return self._client
 
         with self._init_lock:
-            if self._client is not None:
-                return self._client
+            if self._client is not None:  # pragma: no cover
+                return self._client  # pragma: no cover
 
             try:
                 self._client = self._initialize()

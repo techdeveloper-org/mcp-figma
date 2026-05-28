@@ -1,0 +1,39 @@
+{
+  "name": "design-spec-importer",
+  "version": "1.1.0",
+  "description": "Figma plugin that imports AI-generated design specs and creates Figma designs automatically",
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "build:watch": "node esbuild.config.js --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.90.0",
+    "ajv": "^8.17.1",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.5",
+    "@vitest/coverage-v8": "^1.6.0",
+    "vitest": "^1.6.0"
+  },
+  "vitest": {
+    "coverage": {
+      "provider": "v8",
+      "reporter": ["text", "json", "html"],
+      "thresholds": {
+        "lines": 100,
+        "functions": 100,
+        "branches": 100,
+        "statements": 100
+      },
+      "exclude": [
+        "node_modules/**",
+        "dist/**",
+        "tests/**",
+        "esbuild.config.js"
+      ]
+    }
+  }
+}

@@ -1,0 +1,307 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mcp-figma/plugin/schema/design_spec.schema.json",
+  "title": "DesignSpec",
+  "description": "Formal JSON Schema (Draft-07) for the design_spec.json produced by the figma-automation-agent in Phase 3.3 of the SDLC pipeline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["_metadata", "project", "design_system", "screens", "components"],
+  "properties": {
+    "_metadata": {
+      "type": "object",
+      "description": "Provenance metadata injected by the automation agent to satisfy MeitY AI Advisory 2023 traceability requirements.",
+      "additionalProperties": false,
+      "required": ["generated_by", "model", "timestamp", "schema_version"],
+      "properties": {
+        "generated_by": {
+          "type": "string",
+          "description": "Identifier of the agent or tool that generated this design spec.",
+          "minLength": 1,
+          "maxLength": 128,
+          "examples": ["figma-automation-agent"]
+        },
+        "model": {
+          "type": "string",
+          "description": "LLM model identifier used during generation.",
+          "minLength": 1,
+          "maxLength": 128,
+          "examples": ["claude-sonnet-4-6"]
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO 8601 UTC timestamp at the moment of generation.",
+          "format": "date-time",
+          "examples": ["2026-05-28T00:00:00Z"]
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "Semver string identifying the design_spec schema version used.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "examples": ["1.0.0"]
+        }
+      }
+    },
+    "project": {
+      "type": "string",
+      "description": "Human-readable name of the project or product this design spec belongs to.",
+      "minLength": 1,
+      "maxLength": 256,
+      "examples": ["MyApp"]
+    },
+    "design_system": {
+      "type": "object",
+      "description": "Complete design system definition: color palette, typography scale, and spacing scale.",
+      "additionalProperties": false,
+      "required": ["colors", "typography", "spacing"],
+      "properties": {
+        "colors": {
+          "type": "object",
+          "description": "Named color tokens. Each key is a semantic token name; each value is a six-digit hex color string.",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "description": "A six-digit hex color value (e.g. #2563EB)."
+          },
+          "minProperties": 1,
+          "examples": [
+            {
+              "primary": "#2563EB",
+              "surface": "#F8FAFC",
+              "error": "#DC2626"
+            }
+          ]
+        },
+        "typography": {
+          "type": "object",
+          "description": "Named typography tokens. Each key is a semantic token name (e.g. heading-1, body); each value defines font properties.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fontFamily", "fontSize", "fontWeight"],
+            "properties": {
+              "fontFamily": {
+                "type": "string",
+                "description": "CSS font-family value (single font name, no stack).",
+                "minLength": 1,
+                "maxLength": 128,
+                "examples": ["Inter", "Roboto", "SF Pro Display"]
+              },
+              "fontSize": {
+                "type": "number",
+                "description": "Font size in points/pixels. Must be between 8 and 128 inclusive.",
+                "minimum": 8,
+                "maximum": 128,
+                "examples": [12, 14, 16, 20, 24, 32, 48]
+              },
+              "fontWeight": {
+                "type": "number",
+                "description": "CSS numeric font-weight. Must be one of the nine standard weights.",
+                "enum": [100, 200, 300, 400, 500, 600, 700, 800, 900]
+              }
+            }
+          },
+          "minProperties": 1,
+          "examples": [
+            {
+              "heading-1": { "fontFamily": "Inter", "fontSize": 32, "fontWeight": 700 },
+              "body": { "fontFamily": "Inter", "fontSize": 16, "fontWeight": 400 }
+            }
+          ]
+        },
+        "spacing": {
+          "type": "array",
+          "description": "Ordered list of spacing step values in pixels (e.g. [4, 8, 12, 16, 24, 32, 48]). Must contain at least one entry.",
+          "items": {
+            "type": "number",
+            "description": "A single spacing value in pixels.",
+            "minimum": 0,
+            "maximum": 512
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "examples": [
+            [4, 8, 12, 16, 24, 32, 48]
+          ]
+        }
+      }
+    },
+    "screens": {
+      "type": "array",
+      "description": "List of screens (views) defined in the design. Each screen maps to one or more functional requirements.",
+      "items": {
+        "type": "object",
+        "description": "A single screen definition with its FR coverage, viewport dimensions, and component references.",
+        "additionalProperties": false,
+        "required": ["name", "fr_coverage", "width", "height", "components"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Screen display name. Must be unique within the screens array.",
+            "minLength": 1,
+            "maxLength": 256,
+            "examples": ["Login", "Dashboard", "Profile", "Settings"]
+          },
+          "fr_coverage": {
+            "type": "array",
+            "description": "List of functional requirement identifiers that this screen implements.",
+            "items": {
+              "type": "string",
+              "description": "Functional requirement ID in the format FR-NNN (three digits).",
+              "pattern": "^FR-\\d{3}$",
+              "examples": ["FR-001", "FR-002", "FR-015"]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "width": {
+            "type": "number",
+            "description": "Viewport width in pixels. Valid range covers the full spectrum from mobile (320px) to widescreen desktop (1920px).",
+            "minimum": 320,
+            "maximum": 1920,
+            "examples": [375, 390, 768, 1280, 1440]
+          },
+          "height": {
+            "type": "number",
+            "description": "Viewport height in pixels. Valid range covers mobile (480px) to tall desktop viewport (1440px).",
+            "minimum": 480,
+            "maximum": 1440,
+            "examples": [667, 844, 1024, 900, 1080]
+          },
+          "components": {
+            "type": "array",
+            "description": "List of component names (referencing the top-level components array) used in this screen.",
+            "items": {
+              "type": "string",
+              "description": "Component name string. Must correspond to a name property in the top-level components array.",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "uniqueItems": true
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "components": {
+      "type": "array",
+      "description": "Library of reusable UI components defined in the design system.",
+      "items": {
+        "type": "object",
+        "description": "A single component definition with its optional variants, layout direction, and internal padding.",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique component name used as a reference key across the screens array.",
+            "minLength": 1,
+            "maxLength": 256,
+            "examples": ["LoginButton", "NavBar", "InputField", "Avatar"]
+          },
+          "variants": {
+            "type": "array",
+            "description": "Optional list of named variant states for this component (e.g. Default, Loading, Disabled, Error).",
+            "items": {
+              "type": "string",
+              "description": "A single variant name.",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "uniqueItems": true
+          },
+          "layout": {
+            "type": "string",
+            "description": "Primary axis of the component's internal auto-layout direction.",
+            "enum": ["horizontal", "vertical"]
+          },
+          "padding": {
+            "type": "object",
+            "description": "Internal padding values for the component, specified per side in pixels.",
+            "additionalProperties": false,
+            "required": ["top", "right", "bottom", "left"],
+            "properties": {
+              "top": {
+                "type": "number",
+                "description": "Top padding in pixels.",
+                "minimum": 0,
+                "maximum": 256
+              },
+              "right": {
+                "type": "number",
+                "description": "Right padding in pixels.",
+                "minimum": 0,
+                "maximum": 256
+              },
+              "bottom": {
+                "type": "number",
+                "description": "Bottom padding in pixels.",
+                "minimum": 0,
+                "maximum": 256
+              },
+              "left": {
+                "type": "number",
+                "description": "Left padding in pixels.",
+                "minimum": 0,
+                "maximum": 256
+              }
+            }
+          }
+        }
+      },
+      "minItems": 1
+    }
+  },
+  "examples": [
+    {
+      "_metadata": {
+        "generated_by": "figma-automation-agent",
+        "model": "claude-sonnet-4-6",
+        "timestamp": "2026-05-28T00:00:00Z",
+        "schema_version": "1.0.0"
+      },
+      "project": "MyApp",
+      "design_system": {
+        "colors": {
+          "primary": "#2563EB",
+          "surface": "#F8FAFC",
+          "error": "#DC2626"
+        },
+        "typography": {
+          "heading-1": {
+            "fontFamily": "Inter",
+            "fontSize": 32,
+            "fontWeight": 700
+          },
+          "body": {
+            "fontFamily": "Inter",
+            "fontSize": 16,
+            "fontWeight": 400
+          }
+        },
+        "spacing": [4, 8, 12, 16, 24, 32, 48]
+      },
+      "screens": [
+        {
+          "name": "Login",
+          "fr_coverage": ["FR-001", "FR-002"],
+          "width": 390,
+          "height": 844,
+          "components": ["LoginButton"]
+        }
+      ],
+      "components": [
+        {
+          "name": "LoginButton",
+          "variants": ["Default", "Loading", "Disabled"],
+          "layout": "horizontal",
+          "padding": {
+            "top": 12,
+            "right": 24,
+            "bottom": 12,
+            "left": 24
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Design Spec Importer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      color: #1e1e1e;
+      background: #ffffff;
+    }
+
+    .container {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      height: 100vh;
+    }
+
+    h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e1e1e;
+      letter-spacing: -0.1px;
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: #666666;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: #888888;
+      line-height: 1.4;
+    }
+
+    textarea {
+      width: 100%;
+      height: 200px;
+      padding: 8px 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      resize: vertical;
+      background: #fafafa;
+      color: #1e1e1e;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #0d99ff;
+      background: #ffffff;
+    }
+
+    textarea::placeholder {
+      color: #b0b0b0;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .btn-primary {
+      background: #0d99ff;
+      color: #ffffff;
+      width: 100%;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #007acc;
+    }
+
+    .btn-primary:disabled {
+      background: #b0d4f1;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: #666666;
+      border: 1px solid #e0e0e0;
+      padding: 6px 14px;
+    }
+
+    .btn-secondary:hover {
+      background: #f5f5f5;
+    }
+
+    .progress {
+      padding: 10px 12px;
+      background: #f0f8ff;
+      border-radius: 4px;
+      border: 1px solid #b0d4f1;
+      font-size: 12px;
+      color: #0d6eaf;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .progress-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #0d99ff;
+      animation: pulse 1s infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .success {
+      padding: 10px 12px;
+      background: #f0fff4;
+      border-radius: 4px;
+      border: 1px solid #86efac;
+      display: none;
+    }
+
+    .success-title {
+      font-weight: 600;
+      color: #166534;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .error-box {
+      padding: 10px 12px;
+      background: #fff0f0;
+      border-radius: 4px;
+      border: 1px solid #fca5a5;
+      color: #dc2626;
+      font-size: 12px;
+      line-height: 1.5;
+      display: none;
+      word-break: break-word;
+    }
+
+    .summary-textarea {
+      width: 100%;
+      height: 120px;
+      margin-top: 8px;
+      padding: 8px;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 10px;
+      line-height: 1.4;
+      background: #f8f8f8;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      resize: vertical;
+      color: #333333;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: auto;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    code {
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 10px;
+      background: #f0f0f0;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Design Spec Importer</h1>
+
+    <div class="field-group">
+      <label for="specInput">design_spec.json</label>
+      <p class="hint">Paste the AI-generated design spec JSON below (max 1 MB)</p>
+      <textarea
+        id="specInput"
+        placeholder='{ "_metadata": { "generated_by": "claude", "model": "claude-sonnet-4", "timestamp": "2026-05-28T00:00:00Z", "schema_version": "1.0.0" }, "project": "MyApp", "design_system": { ... }, "screens": [ ... ], "components": [ ... ] }'
+        aria-label="design_spec.json content"
+      ></textarea>
+    </div>
+
+    <button
+      class="btn btn-primary"
+      id="importBtn"
+      onclick="startImport()"
+      aria-label="Import spec to Figma"
+    >
+      Import to Figma
+    </button>
+
+    <div class="progress" id="progressBox" role="status" aria-live="polite">
+      <div class="progress-dot"></div>
+      <span id="progressText">Starting import...</span>
+    </div>
+
+    <div class="error-box" id="errorBox" role="alert" aria-live="assertive"></div>
+
+    <div class="success" id="successBox" aria-live="polite">
+      <div class="success-title">&#10003; Import complete!</div>
+      <p class="hint">
+        Copy the summary below and save to
+        <code>docs/phase-3-design/figma_file.md</code>
+      </p>
+      <textarea
+        class="summary-textarea"
+        id="summaryArea"
+        readonly
+        aria-label="Import completion summary JSON"
+      ></textarea>
+    </div>
+
+    <div class="row">
+      <button
+        class="btn btn-secondary"
+        onclick="closePlugin()"
+        aria-label="Close plugin"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Initiates the spec import by reading the textarea value, performing a
+     * basic empty-check, resetting UI state, then posting the payload to the
+     * plugin sandbox via the parent frame postMessage channel.
+     */
+    function startImport() {
+      var input = document.getElementById('specInput').value.trim();
+      if (!input) {
+        showError('Please paste your design_spec.json content first.');
+        return;
+      }
+
+      document.getElementById('importBtn').disabled = true;
+      document.getElementById('errorBox').style.display = 'none';
+      document.getElementById('successBox').style.display = 'none';
+      document.getElementById('progressBox').style.display = 'flex';
+      document.getElementById('progressText').textContent = 'Validating spec...';
+
+      parent.postMessage({ pluginMessage: { type: 'import-spec', payload: input } }, '*');
+    }
+
+    /** Sends a close message to the plugin sandbox to terminate the plugin. */
+    function closePlugin() {
+      parent.postMessage({ pluginMessage: { type: 'close' } }, '*');
+    }
+
+    /**
+     * Displays an error message in the error panel and re-enables the import
+     * button so the user can correct and retry.
+     *
+     * @param {string} msg - The human-readable error message to display.
+     */
+    function showError(msg) {
+      var box = document.getElementById('errorBox');
+      box.textContent = '⚠ ' + msg;
+      box.style.display = 'block';
+      document.getElementById('progressBox').style.display = 'none';
+      document.getElementById('importBtn').disabled = false;
+    }
+
+    /**
+     * Handles messages posted from the plugin sandbox to this UI iframe.
+     * Routes progress, complete, and error message types to their respective
+     * UI update handlers.
+     *
+     * Only messages carrying a pluginMessage property are processed; all
+     * other window message events are silently ignored.
+     */
+    window.onmessage = function (event) {
+      var data = event.data;
+      if (!data || !data.pluginMessage) {
+        return;
+      }
+
+      var msg = data.pluginMessage;
+
+      if (msg.type === 'progress') {
+        document.getElementById('progressText').textContent =
+          'Creating screen ' + msg.current + ' of ' + msg.total + ': ' + msg.screen;
+
+      } else if (msg.type === 'complete') {
+        document.getElementById('progressBox').style.display = 'none';
+        document.getElementById('successBox').style.display = 'block';
+        document.getElementById('summaryArea').value =
+          JSON.stringify(msg.summary, null, 2);
+        document.getElementById('importBtn').disabled = false;
+
+      } else if (msg.type === 'error') {
+        showError(msg.message);
+      }
+    };
+  </script>
+</body>
+</html>

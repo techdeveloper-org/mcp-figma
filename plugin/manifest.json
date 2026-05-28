@@ -1,0 +1,9 @@
+{
+  "name": "Design Spec Importer",
+  "id": "design-spec-importer-v1",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "src/ui.html",
+  "editorType": ["figma"],
+  "networkAccess": { "allowedDomains": [] }
+}

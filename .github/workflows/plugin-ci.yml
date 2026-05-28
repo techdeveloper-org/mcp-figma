@@ -1,0 +1,110 @@
+name: Plugin CI
+
+on:
+  push:
+    branches: [main]
+    paths: ['plugin/**', '.github/workflows/plugin-ci.yml']
+  pull_request:
+    branches: [main]
+    paths: ['plugin/**', '.github/workflows/plugin-ci.yml']
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: plugin
+
+jobs:
+  build-and-typecheck:
+    name: Build & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: plugin/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript type check
+        run: npm run typecheck
+      - name: Build plugin bundle
+        run: npm run build
+      - name: Upload plugin bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-bundle
+          path: |
+            plugin/dist/code.js
+            plugin/manifest.json
+          retention-days: 30
+
+  unit-tests:
+    name: Unit Tests (100% coverage)
+    runs-on: ubuntu-latest
+    needs: build-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: plugin/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run unit tests with coverage
+        run: npm run test -- --coverage
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: plugin/coverage/
+          retention-days: 14
+
+  security-scan:
+    name: Security Scan (npm audit)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: plugin/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run npm security audit
+        run: npm audit --audit-level=moderate
+
+  package:
+    name: Package Plugin Release
+    runs-on: ubuntu-latest
+    needs: [build-and-typecheck, unit-tests, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: plugin/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Build plugin
+        run: npm run build
+      - name: Get plugin version
+        id: version
+        run: echo "version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
+        working-directory: plugin
+      - name: Package plugin zip
+        run: |
+          cd plugin
+          zip -j figma-design-spec-importer-v${{ steps.version.outputs.version }}.zip dist/code.js manifest.json
+        working-directory: .
+      - name: Upload packaged plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: figma-design-spec-importer-v${{ steps.version.outputs.version }}
+          path: plugin/figma-design-spec-importer-v${{ steps.version.outputs.version }}.zip
+          retention-days: 90

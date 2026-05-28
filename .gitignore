@@ -27,3 +27,9 @@ module_architecture_blueprint.md
 module_stubs_architecture.md
 consensus_verdict.md
 context_delivery_plan.md
+
+# Figma Plugin build output
+plugin/dist/
+plugin/node_modules/
+plugin/coverage/
+plugin/figma-design-spec-importer-*.zip

@@ -4,8 +4,11 @@
 ![License MIT](https://img.shields.io/badge/License-MIT-green)
 ![Part of claude-workflow-engine](https://img.shields.io/badge/Part%20of-claude--workflow--engine-orange)
 ![MCP Server](https://img.shields.io/badge/MCP-Server-purple)
+![Plugin CI](https://github.com/techdeveloper-org/mcp-figma/actions/workflows/plugin-ci.yml/badge.svg)
 
 Figma design-to-code MCP server for Claude Code. Connects Claude to the Figma REST API over stdio JSON-RPC, enabling design file inspection, component extraction, design token parsing, frame layout analysis, image export, and design review comments — all without any external HTTP client dependencies (stdlib `urllib` only). Used by the Claude Workflow Engine to automate the design-to-code lifecycle: extracting components and tokens during orchestration planning (Step 0), posting implementation progress comments (Step 10), running design fidelity review (Step 11), and closing the design review loop on merge (Step 12).
+
+This repository also contains the **Design Spec Importer** — a TypeScript Figma Plugin that reads AI-generated `design_spec.json` files and creates complete Figma designs (pages, frames, components, design token variables, and FR coverage annotations) inside an open Figma file. It bridges Phase 3 of the AI-driven UI/UX pipeline: AI agents generate the spec, the plugin writes it to Figma, and mcp-figma reads the result back for token export and accessibility validation.
 
 ---
 
@@ -29,6 +32,15 @@ Figma design-to-code MCP server for Claude Code. Connects Claude to the Figma RE
 - Component code generation: React, SwiftUI, Android XML, CSS, Flutter from Figma frames
 - Visual regression via perceptual hash (pHash) and Hamming distance comparison
 - Semantic version bump computation from two DTCG token snapshots
+
+**Design Spec Importer Plugin (`plugin/`):**
+
+- Reads AI-generated `design_spec.json` (validated against JSON Schema Draft-07 at startup)
+- Creates Figma pages, frames with auto-layout, and reusable components from spec
+- Builds component variant sets via `figma.combineAsVariants()`
+- Creates design token variable collections (Colors, Spacing, Typography) using the Figma Variables API
+- Annotates each frame with FR coverage references for traceability
+- Outputs a structured completion summary (file key + page/frame node IDs) for mcp-figma read-back
 
 ---
 
@@ -314,6 +326,76 @@ This lifecycle ensures design intent flows from Figma into the codebase without 
 
 ---
 
+## Phase 3 — Design Spec Importer Plugin
+
+The plugin bridges AI-generated design specs to a live Figma file. It is part of the Phase 3 UI/UX Design Pipeline that runs after Phase 2 (Joint Blueprint Validation) and before Phase B (Engineering).
+
+### How it works
+
+```
+Phase 2 JOINT APPROVED
+        ↓
+[Phase 3.2] AI agents generate design_spec.json from PRD + HLD
+        ↓
+[Phase 3.3] User runs Design Spec Importer plugin in Figma
+            → Pages, frames, components, tokens created automatically
+            → Completion summary (file key + node IDs) saved to docs/phase-3-design/figma_file.md
+        ↓
+[Phase 3.4] mcp-figma reads the created file back:
+            → figma_extract_design_tokens → design_tokens.dtcg.json
+            → generate_css_tokens / generate_android_tokens / generate_ios_tokens
+            → compute_apca_contrast + compute_wcag_contrast → accessibility_report.json
+            → generate_react_component / generate_swift_component (code stubs)
+        ↓
+[Phase 3.6] consensus-agent reviews: FR coverage? AC implementable? Accessibility passes?
+        ↓
+DESIGN APPROVED → Engineers start Phase B with HLD + Figma + tokens + code stubs
+```
+
+### Plugin quick start
+
+```bash
+cd plugin
+npm install
+npm run build          # bundles src/code.ts → dist/code.js via esbuild
+npm run test           # 121 tests, 100% coverage (vitest + @figma/plugin-ds mock)
+npm run typecheck      # tsc --noEmit, strict mode
+```
+
+Install in Figma: **Plugins → Development → Import plugin from manifest** → select `plugin/manifest.json`.
+
+### design_spec.json format
+
+```json
+{
+  "_metadata": {
+    "generated_by": "figma-automation-agent",
+    "model": "claude-sonnet-4-6",
+    "timestamp": "2026-05-28T00:00:00Z",
+    "schema_version": "1.0.0"
+  },
+  "project": "MyApp",
+  "design_system": {
+    "colors": { "primary": "#2563EB", "surface": "#F8FAFC", "error": "#DC2626" },
+    "typography": {
+      "heading-1": { "fontFamily": "Inter", "fontSize": 32, "fontWeight": 700 },
+      "body": { "fontFamily": "Inter", "fontSize": 16, "fontWeight": 400 }
+    },
+    "spacing": [4, 8, 12, 16, 24, 32, 48]
+  },
+  "screens": [
+    { "name": "Login", "fr_coverage": ["FR-001", "FR-002"], "width": 390, "height": 844, "components": ["LoginButton"] }
+  ],
+  "components": [
+    { "name": "LoginButton", "variants": ["Default", "Loading", "Disabled"], "layout": "horizontal", "padding": { "top": 12, "right": 24, "bottom": 12, "left": 24 } }
+  ]
+}
+```
+
+Full schema at `plugin/schema/design_spec.schema.json`. See `docs/phase-3-design/token-pipeline-spec.md` for the complete mcp-figma read-back sequence.
+
+---
+
 ## File Structure
 
 ```
@@ -333,6 +415,34 @@ mcp-figma/
 +-- rate_limiter.py           # Token bucket rate limiting
 +-- tests/                    # Test suite: 202 unit + 14 integration + 22 e2e tests
 +-- requirements.txt          # Pinned dependencies
++-- plugin/                   # Design Spec Importer — Figma Plugin (TypeScript)
+|   +-- manifest.json         # Figma plugin manifest (networkAccess: no external domains)
+|   +-- package.json          # devDeps: @figma/plugin-typings, esbuild, vitest, ajv
+|   +-- tsconfig.json         # strict: true, target: ES2017
+|   +-- esbuild.config.js     # Bundles src/code.ts → dist/code.js (IIFE, no externals)
+|   +-- vitest.config.ts      # 100% coverage thresholds (lines/functions/branches/stmts)
+|   +-- src/
+|   |   +-- code.ts           # Main sandbox: origin check, 1MB guard, schema validate, orchestrate
+|   |   +-- ui.html           # Plugin UI: textarea, progress, completion summary panel
+|   |   +-- types.ts          # DesignSpec, Screen, Component, PluginCompletionSummary interfaces
+|   |   +-- schema.ts         # AJV-compiled JSON Schema Draft-07 validator
+|   |   +-- builders/
+|   |       +-- token-builder.ts     # figma.variables.* — Colors/Spacing/Typography collections
+|   |       +-- page-builder.ts      # figma.createPage() per screen
+|   |       +-- frame-builder.ts     # figma.createFrame() + VERTICAL auto-layout
+|   |       +-- component-builder.ts # figma.createComponent() + figma.combineAsVariants()
+|   |       +-- comment-builder.ts   # FR coverage text annotation per frame
+|   +-- schema/
+|   |   +-- design_spec.schema.json  # JSON Schema Draft-07 (used by AI agents to validate output)
+|   +-- tests/                # 121 vitest unit tests — 100% line/branch/function/statement coverage
++-- docs/
+|   +-- orchestration_prompt.md       # Phase 3 orchestration prompt (Pattern 43)
+|   +-- staging-env-spec.md           # CERT-In compliant Figma PAT rotation procedure
+|   +-- phase-3-design/
+|       +-- README.md                 # Output file registry (10 artifacts, creation order)
+|       +-- token-pipeline-spec.md    # DTCG pipeline + APCA/WCAG validation sequence
++-- .github/workflows/
+|   +-- plugin-ci.yml         # 4-job CI: typecheck → unit tests (100%) → npm audit → package
 +-- README.md
 ```
 

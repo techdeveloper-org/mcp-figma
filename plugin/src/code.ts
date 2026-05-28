@@ -30,8 +30,12 @@ import type {
   PluginCompletionSummary,
 } from './types';
 
-/** Maximum accepted payload size in bytes. Payloads exceeding this are rejected. */
-const MAX_SPEC_BYTES = 1_048_576; // 1 MB
+/**
+ * Maximum accepted payload character count. Figma plugin sandbox has no DOM
+ * APIs (no TextEncoder), so we bound by character count. JSON is mostly ASCII
+ * (1 byte/char in UTF-8), so 1,048,576 characters ≈ 1 MB upper bound.
+ */
+const MAX_SPEC_CHARS = 1_048_576; // ~1 MB for ASCII-dominant JSON
 
 figma.showUI(__html__, { width: 480, height: 600, title: 'Design Spec Importer' });
 
@@ -79,7 +83,7 @@ figma.ui.onmessage = (rawMsg: unknown, props: OnMessageProperties): void => {
  */
 async function importSpec(rawJson: string): Promise<void> {
   try {
-    if (new TextEncoder().encode(rawJson).length > MAX_SPEC_BYTES) {
+    if (rawJson.length > MAX_SPEC_CHARS) {
       sendToUI({
         type: 'error',
         message: 'design_spec.json exceeds 1MB size limit. Please reduce spec size.',

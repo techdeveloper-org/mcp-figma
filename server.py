@@ -63,6 +63,7 @@ try:
     from mcp.server.mcpserver import MCPServer
 except ImportError:  # mcp < 2.0
     from mcp.server.fastmcp import FastMCP as MCPServer
+from mcp.types import ToolAnnotations
 from base.decorators import mcp_tool_handler
 
 from input_validator import validate_input
@@ -79,6 +80,45 @@ import figma_visual
 mcp = MCPServer(
     "figma-api",
     instructions="Figma design file operations via REST API"
+)
+
+# Tool safety annotations. An MCP tool that declares no annotations inherits the
+# spec defaults (readOnlyHint=False, destructiveHint=True, idempotentHint=False,
+# openWorldHint=True) -- the least-safe combination -- so every tool below
+# declares its own vector explicitly rather than relying on omission.
+_READ_REMOTE = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=True,
+)
+
+_PURE_COMPUTE = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=False,
+)
+
+_CREATE_REMOTE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=True,
+)
+
+_MUTATE_REMOTE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=True,
+)
+
+_DESTRUCTIVE_REMOTE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=True,
+    idempotentHint=False,
+    openWorldHint=True,
 )
 
 # ---------------------------------------------------------------------------
@@ -271,7 +311,7 @@ def _deduplicate_spacing(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # Tools
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_file_info(file_key: str) -> dict:
     """Get Figma file metadata: name, last modified, version, and pages.
@@ -302,7 +342,7 @@ def figma_get_file_info(file_key: str) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_node(file_key: str, node_id: str) -> dict:
     """Get details of a specific node (frame, component, group, etc.) by ID.
@@ -353,7 +393,7 @@ def figma_get_node(file_key: str, node_id: str) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_styles(file_key: str) -> dict:
     """Extract all published styles from a Figma file (colors, text, effects, grids).
@@ -390,7 +430,7 @@ def figma_get_styles(file_key: str) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_components(file_key: str) -> dict:
     """List all published components and component sets in a Figma file.
@@ -434,7 +474,7 @@ def figma_get_components(file_key: str) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_extract_design_tokens(
     file_key: str,
@@ -502,7 +542,7 @@ def figma_extract_design_tokens(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_frame_layout(file_key: str, node_id: str) -> dict:
     """Get auto-layout / flexbox properties for a specific frame node.
@@ -551,7 +591,7 @@ def figma_get_frame_layout(file_key: str, node_id: str) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_export_image(
     file_key: str,
@@ -601,7 +641,7 @@ def figma_export_image(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_comments(file_key: str) -> dict:
     """Get all design review comments from a Figma file.
@@ -640,7 +680,7 @@ def figma_get_comments(file_key: str) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_CREATE_REMOTE)
 @mcp_tool_handler
 def figma_add_comment(
     file_key: str,
@@ -676,19 +716,21 @@ def figma_add_comment(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_health_check() -> dict:
     """Verify Figma API connectivity and token validity.
 
-    Calls GET /v1/me to confirm the token works and returns the current user.
+    Calls GET /v1/me to confirm the token works and identifies the account by
+    its Figma handle. The account email returned by /v1/me is deliberately not
+    included: connectivity verification does not require it, and returning it
+    would exceed the purpose this tool is called for (DPDP Act 2023 s.4
+    data minimization).
     """
     data = _make_figma_request("/v1/me")
 
     user_id = data.get("id", "")
     name = data.get("handle", "") or data.get("name", "")
-    email = data.get("email", "")
-    img = data.get("img_url", "")
 
     connected = bool(user_id)
     team_id = os.environ.get("FIGMA_TEAM_ID", "")
@@ -697,8 +739,6 @@ def figma_health_check() -> dict:
         "connected": connected,
         "user_id": user_id,
         "name": name,
-        "email": email,
-        "img_url": img,
         "team_id_configured": bool(team_id),
         "team_id": team_id,
         "enable_figma": os.environ.get("ENABLE_FIGMA", "0"),
@@ -709,7 +749,7 @@ def figma_health_check() -> dict:
 # Variables tools
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_list_variable_collections(file_key: str) -> dict:
     """List all variable collections defined in a Figma file.
@@ -720,7 +760,7 @@ def figma_list_variable_collections(file_key: str) -> dict:
     return figma_variables.list_variable_collections(figma_client._parse_file_key(file_key))
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_list_variables(
     file_key: str,
@@ -738,7 +778,7 @@ def figma_list_variables(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_variable(file_key: str, variable_id: str) -> dict:
     """Retrieve a single variable by its ID from a Figma file.
@@ -753,7 +793,7 @@ def figma_get_variable(file_key: str, variable_id: str) -> dict:
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_CREATE_REMOTE)
 @mcp_tool_handler
 def figma_create_variable(
     file_key: str,
@@ -780,7 +820,7 @@ def figma_create_variable(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MUTATE_REMOTE)
 @mcp_tool_handler
 def figma_update_variable(
     file_key: str,
@@ -804,7 +844,7 @@ def figma_update_variable(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_DESTRUCTIVE_REMOTE)
 @mcp_tool_handler
 def figma_delete_variable(file_key: str, variable_id: str) -> dict:
     """Delete a variable from a Figma file.
@@ -819,7 +859,7 @@ def figma_delete_variable(file_key: str, variable_id: str) -> dict:
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_DESTRUCTIVE_REMOTE)
 @mcp_tool_handler
 def figma_batch_update_variables(
     file_key: str,
@@ -837,7 +877,7 @@ def figma_batch_update_variables(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MUTATE_REMOTE)
 @mcp_tool_handler
 def figma_publish_variable_library(file_key: str) -> dict:
     """Publish the variable library so consumers can subscribe.
@@ -854,7 +894,7 @@ def figma_publish_variable_library(file_key: str) -> dict:
 # Webhooks tools
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_list_webhooks(team_id: str) -> dict:
     """List all webhooks registered for a Figma team.
@@ -865,7 +905,7 @@ def figma_list_webhooks(team_id: str) -> dict:
     return figma_webhooks.list_webhooks(team_id)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_CREATE_REMOTE)
 @mcp_tool_handler
 def figma_create_webhook(
     team_id: str,
@@ -892,7 +932,7 @@ def figma_create_webhook(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MUTATE_REMOTE)
 @mcp_tool_handler
 def figma_update_webhook(
     webhook_id: str,
@@ -916,7 +956,7 @@ def figma_update_webhook(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_DESTRUCTIVE_REMOTE)
 @mcp_tool_handler
 def figma_delete_webhook(webhook_id: str) -> dict:
     """Delete a Figma webhook by its ID.
@@ -927,8 +967,8 @@ def figma_delete_webhook(webhook_id: str) -> dict:
     return figma_webhooks.delete_webhook(webhook_id)
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_verify_webhook_signature(
     payload: str,
     signature: str,
@@ -948,8 +988,8 @@ def figma_verify_webhook_signature(
 # Accessibility tools
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_compute_apca_contrast(
     text_color_hex: str,
     bg_color_hex: str,
@@ -963,8 +1003,8 @@ def figma_compute_apca_contrast(
     return figma_accessibility.compute_apca_contrast(text_color_hex, bg_color_hex)
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_compute_wcag_contrast(
     color1_hex: str,
     color2_hex: str,
@@ -978,7 +1018,7 @@ def figma_compute_wcag_contrast(
     return figma_accessibility.compute_wcag_contrast(color1_hex, color2_hex)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_scan_color_accessibility(
     file_key: str,
@@ -1000,7 +1040,7 @@ def figma_scan_color_accessibility(
 # Tokens tools
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_export_dtcg_tokens(
     file_key: str,
@@ -1021,7 +1061,7 @@ def figma_export_dtcg_tokens(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_extract_oklch_colors(
     file_key: str,
@@ -1039,8 +1079,8 @@ def figma_extract_oklch_colors(
     )
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_generate_type_scale(
     base_size_px: int = 16,
     scale_ratio: float = 1.25,
@@ -1060,8 +1100,8 @@ def figma_generate_type_scale(
     )
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_resolve_token_aliases(dtcg_tokens: Dict[str, Any]) -> dict:
     """Resolve all alias references in a DTCG token tree to concrete values.
 
@@ -1071,8 +1111,8 @@ def figma_resolve_token_aliases(dtcg_tokens: Dict[str, Any]) -> dict:
     return figma_tokens.resolve_token_aliases(dtcg_tokens)
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_tokens_to_css_vars(
     dtcg_tokens: Dict[str, Any],
     prefix: str = "--",
@@ -1086,8 +1126,8 @@ def figma_tokens_to_css_vars(
     return figma_tokens.tokens_to_css_vars(dtcg_tokens, prefix=prefix)
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_diff_token_versions(
     prev_dtcg: Dict[str, Any],
     curr_dtcg: Dict[str, Any],
@@ -1105,8 +1145,8 @@ def figma_diff_token_versions(
 # Multiplatform tools
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_tokens_to_android(
     dtcg_tokens: Dict[str, Any],
     density: float = 2.0,
@@ -1120,8 +1160,8 @@ def figma_tokens_to_android(
     return figma_multiplatform.tokens_to_android(dtcg_tokens, density=density)
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_tokens_to_ios(
     dtcg_tokens: Dict[str, Any],
     base_ppi: float = 163.0,
@@ -1141,8 +1181,8 @@ def figma_tokens_to_ios(
     )
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_tokens_to_css_rem(
     dtcg_tokens: Dict[str, Any],
     base_font_px: int = 16,
@@ -1159,8 +1199,8 @@ def figma_tokens_to_css_rem(
     )
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_dark_mode_token_pairs(dtcg_tokens: Dict[str, Any]) -> dict:
     """Pair light and dark mode token values from a DTCG token tree.
 
@@ -1170,8 +1210,8 @@ def figma_dark_mode_token_pairs(dtcg_tokens: Dict[str, Any]) -> dict:
     return figma_multiplatform.dark_mode_token_pairs(dtcg_tokens)
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_fluid_typography_clamp(
     min_font_px: int,
     max_font_px: int,
@@ -1198,7 +1238,7 @@ def figma_fluid_typography_clamp(
 # Codegen tools
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_layout_to_flexbox(file_key: str, node_id: str) -> dict:
     """Convert a Figma auto-layout node to CSS flexbox properties.
@@ -1214,7 +1254,7 @@ def figma_layout_to_flexbox(file_key: str, node_id: str) -> dict:
     return figma_codegen.layout_to_flexbox(node)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_layout_to_css_grid(file_key: str, node_id: str) -> dict:
     """Convert a Figma frame with grid guides to CSS grid properties.
@@ -1230,7 +1270,7 @@ def figma_layout_to_css_grid(file_key: str, node_id: str) -> dict:
     return figma_codegen.layout_to_css_grid(node)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_variant_matrix(file_key: str, node_id: str) -> dict:
     """Build a variant property matrix from a Figma component-set node.
@@ -1246,7 +1286,7 @@ def figma_get_variant_matrix(file_key: str, node_id: str) -> dict:
     return figma_codegen.get_variant_matrix(node)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_generate_react_interface(file_key: str, node_id: str) -> dict:
     """Generate a TypeScript React props interface from a component-set.
@@ -1262,7 +1302,7 @@ def figma_generate_react_interface(file_key: str, node_id: str) -> dict:
     return {"interface": figma_codegen.generate_react_interface(node)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_generate_css_component(
     file_key: str,
@@ -1283,7 +1323,7 @@ def figma_generate_css_component(
     return {"css": figma_codegen.generate_css_component(node, component_name)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_code_connect_annotations(
     file_key: str,
@@ -1305,7 +1345,7 @@ def figma_get_code_connect_annotations(
 # Visual regression tools
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_compute_phash(image_url: str) -> dict:
     """Compute a 64-bit DCT perceptual hash of an image at the given URL.
@@ -1316,8 +1356,8 @@ def figma_compute_phash(image_url: str) -> dict:
     return {"phash": figma_visual.compute_phash(image_url)}
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_compare_phash_hamming(
     hash1: str,
     hash2: str,
@@ -1333,8 +1373,8 @@ def figma_compare_phash_hamming(
     return figma_visual.compare_phash_hamming(hash1, hash2, threshold=threshold)
 
 
-@mcp.tool()
-@mcp_tool_handler
+@mcp.tool(annotations=_PURE_COMPUTE)
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_bump_token_semver(
     prev_dtcg_json: str,
     curr_dtcg_json: str,
@@ -1354,7 +1394,7 @@ def figma_bump_token_semver(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_file_version_history(
     file_key: str,

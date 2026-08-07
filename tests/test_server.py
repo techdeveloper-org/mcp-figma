@@ -479,6 +479,7 @@ class TestFigmaHealthCheck:
         assert result["connected"] is True
         assert result["user_id"] == "u1"
         assert result["team_id"] == "team123"
+        assert "email" not in result
 
     def test_returns_disconnected_when_no_id(self):
         with patch("server._make_figma_request") as mock_req:

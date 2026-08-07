@@ -607,18 +607,37 @@ class TestGitHubApiClientInitialize:
 
     @pytest.mark.unit
     def test_initialize_returns_github_instance_when_token_and_module_available(self):
-        """_initialize returns Github(token) when PyGithub and token are available."""
+        """_initialize returns a Github client whose retry policy excludes POST.
+
+        PyGithub's default GithubRetry retries POST, so a lost response on a
+        create call would file a duplicate resource. The client must therefore
+        pass an explicit retry policy restricted to idempotent methods.
+        """
         mock_gh_instance = MagicMock()
         mock_github_module = MagicMock()
         mock_github_module.Github.return_value = mock_gh_instance
+        mock_retry_module = MagicMock()
 
         with patch.dict("os.environ", {"GITHUB_TOKEN": "test_tok"}):
-            with patch.dict("sys.modules", {"github": mock_github_module}):
+            with patch.dict(
+                "sys.modules",
+                {
+                    "github": mock_github_module,
+                    "github.GithubRetry": mock_retry_module,
+                },
+            ):
                 c = GitHubApiClient.instance()
                 result = c._initialize()
 
         assert result is mock_gh_instance
-        mock_github_module.Github.assert_called_once_with("test_tok")
+        call = mock_github_module.Github.call_args
+        assert call.args[0] == "test_tok"
+        assert "retry" in call.kwargs
+
+        retry_kwargs = mock_retry_module.GithubRetry.call_args.kwargs
+        allowed = set(retry_kwargs["allowed_methods"])
+        assert "POST" not in allowed
+        assert "GET" in allowed
 
     @pytest.mark.unit
     def test_get_repo_returns_repo_when_remote_parsed(self):

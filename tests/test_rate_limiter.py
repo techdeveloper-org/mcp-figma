@@ -66,7 +66,7 @@ class TestTokenBucket:
         """_refill() adds refill_rate * elapsed seconds of tokens."""
         bucket = TokenBucket(capacity=100, refill_rate=10.0)
         bucket._tokens = 0.0
-        bucket._last_refill = time.time() - 5.0
+        bucket._last_refill = time.monotonic() - 5.0
         bucket._refill()
         assert bucket._tokens == pytest.approx(50.0, abs=1.0)
 
@@ -74,7 +74,7 @@ class TestTokenBucket:
         """_refill() never exceeds the bucket capacity."""
         bucket = TokenBucket(capacity=5.0, refill_rate=1000.0)
         bucket._tokens = 0.0
-        bucket._last_refill = time.time() - 10.0
+        bucket._last_refill = time.monotonic() - 10.0
         bucket._refill()
         assert bucket._tokens == pytest.approx(5.0)
 
@@ -82,7 +82,7 @@ class TestTokenBucket:
         """consume() calls _refill() so elapsed time is accounted for."""
         bucket = TokenBucket(capacity=100, refill_rate=10.0)
         bucket._tokens = 0.0
-        bucket._last_refill = time.time() - 1.0
+        bucket._last_refill = time.monotonic() - 1.0
         result = bucket.consume()
         assert result is True
 
@@ -177,11 +177,13 @@ class TestCheckRateLimit:
         with patch.dict(os.environ, {"ENABLE_RATE_LIMITING": "1"}):
             bucket = _get_or_create_bucket("empty_client", "tool_calls")
             bucket._tokens = 0.0
-            bucket._last_refill = time.time()
+            bucket._last_refill = time.monotonic()
+            expected_retry_after = bucket.seconds_until_available()
             result = check_rate_limit(client_id="empty_client", bucket="tool_calls")
         assert result["allowed"] is False
         assert result["error"] == "rate_limit_exceeded"
-        assert result["retry_after"] == _RETRY_AFTER_SECONDS
+        assert result["retry_after"] == pytest.approx(expected_retry_after, abs=1.0)
+        assert 0 < result["retry_after"] <= _RETRY_AFTER_SECONDS
 
     def test_default_client_id_is_default(self):
         """Calling without client_id uses the 'default' bucket key."""

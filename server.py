@@ -968,7 +968,7 @@ def figma_delete_webhook(webhook_id: str) -> dict:
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_verify_webhook_signature(
     payload: str,
     signature: str,
@@ -989,7 +989,7 @@ def figma_verify_webhook_signature(
 # ---------------------------------------------------------------------------
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_compute_apca_contrast(
     text_color_hex: str,
     bg_color_hex: str,
@@ -1004,7 +1004,7 @@ def figma_compute_apca_contrast(
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_compute_wcag_contrast(
     color1_hex: str,
     color2_hex: str,
@@ -1080,7 +1080,7 @@ def figma_extract_oklch_colors(
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_generate_type_scale(
     base_size_px: int = 16,
     scale_ratio: float = 1.25,
@@ -1101,7 +1101,7 @@ def figma_generate_type_scale(
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_resolve_token_aliases(dtcg_tokens: Dict[str, Any]) -> dict:
     """Resolve all alias references in a DTCG token tree to concrete values.
 
@@ -1112,7 +1112,7 @@ def figma_resolve_token_aliases(dtcg_tokens: Dict[str, Any]) -> dict:
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_tokens_to_css_vars(
     dtcg_tokens: Dict[str, Any],
     prefix: str = "--",
@@ -1127,7 +1127,7 @@ def figma_tokens_to_css_vars(
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_diff_token_versions(
     prev_dtcg: Dict[str, Any],
     curr_dtcg: Dict[str, Any],
@@ -1146,7 +1146,7 @@ def figma_diff_token_versions(
 # ---------------------------------------------------------------------------
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_tokens_to_android(
     dtcg_tokens: Dict[str, Any],
     density: float = 2.0,
@@ -1161,7 +1161,7 @@ def figma_tokens_to_android(
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_tokens_to_ios(
     dtcg_tokens: Dict[str, Any],
     base_ppi: float = 163.0,
@@ -1182,7 +1182,7 @@ def figma_tokens_to_ios(
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_tokens_to_css_rem(
     dtcg_tokens: Dict[str, Any],
     base_font_px: int = 16,
@@ -1200,7 +1200,7 @@ def figma_tokens_to_css_rem(
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_dark_mode_token_pairs(dtcg_tokens: Dict[str, Any]) -> dict:
     """Pair light and dark mode token values from a DTCG token tree.
 
@@ -1211,7 +1211,7 @@ def figma_dark_mode_token_pairs(dtcg_tokens: Dict[str, Any]) -> dict:
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_fluid_typography_clamp(
     min_font_px: int,
     max_font_px: int,
@@ -1357,7 +1357,7 @@ def figma_compute_phash(image_url: str) -> dict:
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_compare_phash_hamming(
     hash1: str,
     hash2: str,
@@ -1374,7 +1374,7 @@ def figma_compare_phash_hamming(
 
 
 @mcp.tool(annotations=_PURE_COMPUTE)
-@mcp_tool_handler
+@mcp_tool_handler(rate_limit_bucket=None)
 def figma_bump_token_semver(
     prev_dtcg_json: str,
     curr_dtcg_json: str,

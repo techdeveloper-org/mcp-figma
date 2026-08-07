@@ -127,7 +127,10 @@ def test_compute_phash_figma_cdn_url_allowed():
     mock_resp = MagicMock()
     mock_resp.read.return_value = b"fake_image_bytes"
 
-    with patch("urllib.request.urlopen", return_value=mock_resp):
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = False
+
+    with patch("figma_visual._IMAGE_OPENER.open", return_value=mock_resp):
         result = compute_phash(url)
 
     assert isinstance(result, str)
@@ -141,7 +144,10 @@ def test_compute_phash_figma_com_url_allowed():
     mock_resp = MagicMock()
     mock_resp.read.return_value = b"figma_image_bytes_for_test"
 
-    with patch("urllib.request.urlopen", return_value=mock_resp):
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = False
+
+    with patch("figma_visual._IMAGE_OPENER.open", return_value=mock_resp):
         result = compute_phash(url)
 
     assert len(result) == 16
@@ -154,7 +160,10 @@ def test_compute_phash_www_figma_com_url_allowed():
     mock_resp = MagicMock()
     mock_resp.read.return_value = b"www_figma_image"
 
-    with patch("urllib.request.urlopen", return_value=mock_resp):
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = False
+
+    with patch("figma_visual._IMAGE_OPENER.open", return_value=mock_resp):
         result = compute_phash(url)
 
     assert len(result) == 16
@@ -167,7 +176,10 @@ def test_compute_phash_returns_16_char_hex():
     mock_resp = MagicMock()
     mock_resp.read.return_value = b"any_bytes"
 
-    with patch("urllib.request.urlopen", return_value=mock_resp):
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = False
+
+    with patch("figma_visual._IMAGE_OPENER.open", return_value=mock_resp):
         result = compute_phash(url)
 
     assert len(result) == 16
@@ -314,7 +326,7 @@ def test_bump_semver_changes_summary_keys():
 
 @pytest.mark.unit
 def test_get_file_version_history_structure():
-    """get_file_version_history returns dict with file_key, versions, total_count."""
+    """get_file_version_history returns file_key, versions, and returned_count."""
     versions_response = {
         "versions": [
             {
@@ -333,7 +345,9 @@ def test_get_file_version_history_structure():
             result = get_file_version_history("FILEKEY")
 
     assert result["file_key"] == "FILEKEY"
-    assert result["total_count"] == 1
+    assert result["returned_count"] == 1
+    assert result["truncated"] is False
+    assert result["next_page"] is None
     assert "versions" in result
 
 
@@ -365,14 +379,14 @@ def test_get_file_version_history_version_fields():
 
 @pytest.mark.unit
 def test_get_file_version_history_empty():
-    """Empty versions list returns total_count == 0."""
+    """Empty versions list returns returned_count == 0."""
     mock_resp = make_mock_response({"versions": []})
 
     with patch.dict(os.environ, {"FIGMA_ACCESS_TOKEN": "tok"}, clear=False):
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = get_file_version_history("FILEKEY")
 
-    assert result["total_count"] == 0
+    assert result["returned_count"] == 0
     assert result["versions"] == []
 
 

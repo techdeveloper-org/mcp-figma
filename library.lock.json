@@ -1,0 +1,37 @@
+{
+  "schema": "library-project-sync-v1",
+  "library": {
+    "name": "claude-global-library",
+    "version": "29.82.1"
+  },
+  "agents": [
+    "figma-automation-engineer",
+    "figma-automation-mathematics-expert",
+    "figma-ci-cd-engineer",
+    "figma-plugin-engineer",
+    "figma-token-automation-engineer"
+  ],
+  "skills": [
+    "design-tokens-automation-core",
+    "figma-ai-automation-core",
+    "figma-ci-cd-pipeline-core",
+    "figma-codegen-core",
+    "figma-multiplatform-tokens-core",
+    "figma-plugin-widget-core",
+    "figma-rest-api-core"
+  ],
+  "managed_files": [
+    ".claude/agents/figma-automation-engineer.md",
+    ".claude/agents/figma-automation-mathematics-expert.md",
+    ".claude/agents/figma-ci-cd-engineer.md",
+    ".claude/agents/figma-plugin-engineer.md",
+    ".claude/agents/figma-token-automation-engineer.md",
+    ".claude/skills/design-tokens-automation-core/SKILL.md",
+    ".claude/skills/figma-ai-automation-core/SKILL.md",
+    ".claude/skills/figma-ci-cd-pipeline-core/SKILL.md",
+    ".claude/skills/figma-codegen-core/SKILL.md",
+    ".claude/skills/figma-multiplatform-tokens-core/SKILL.md",
+    ".claude/skills/figma-plugin-widget-core/SKILL.md",
+    ".claude/skills/figma-rest-api-core/SKILL.md"
+  ]
+}

@@ -2,7 +2,6 @@
 
 ![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![License MIT](https://img.shields.io/badge/License-MIT-green)
-![Part of claude-workflow-engine](https://img.shields.io/badge/Part%20of-claude--workflow--engine-orange)
 ![MCP Server](https://img.shields.io/badge/MCP-Server-purple)
 ![Plugin CI](https://github.com/techdeveloper-org/mcp-figma/actions/workflows/plugin-ci.yml/badge.svg)
 
@@ -452,9 +451,11 @@ The `base/` directory is a copy of the shared [mcp-base](https://github.com/tech
 
 ---
 
-## Part of the Claude Workflow Engine Ecosystem
+## Related projects
 
-This server is one of 13 MCP servers extracted from the [claude-workflow-engine](https://github.com/techdeveloper-org/claude-workflow-engine) into independent repositories for separate versioning and reuse:
+> **Standalone.** This server has no runtime dependency on any other project. It speaks MCP over stdio and works with any MCP client.
+
+This server is one of 13 that were split out of the [claude-workflow-engine](https://github.com/techdeveloper-org/claude-workflow-engine) into independent repositories for separate versioning and reuse:
 
 | Server | Purpose |
 |--------|---------|

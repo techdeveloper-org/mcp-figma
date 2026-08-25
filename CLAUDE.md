@@ -152,7 +152,6 @@ mcp-figma/
 +-- pytest.ini
 +-- mypy.ini
 +-- .pre-commit-config.yaml
-+-- .github/workflows/ci.yml
 +-- VERSION                   # 1.1.0
 +-- .gitignore
 +-- README.md

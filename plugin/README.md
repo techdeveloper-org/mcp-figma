@@ -36,6 +36,12 @@ npm run build
 1. Build: `npm run build`
 2. In Figma: **Plugins → Development → Publish plugin** (requires Figma Organization plan)
 
-## CI Status
+## Checks
 
-![Plugin CI](../../.github/workflows/plugin-ci.yml)
+There is no CI pipeline. Run the same checks locally:
+
+```bash
+npm run typecheck     # TypeScript
+npm test              # unit tests
+npm audit             # dependency advisories
+```

@@ -3,7 +3,6 @@
 ![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![License MIT](https://img.shields.io/badge/License-MIT-green)
 ![MCP Server](https://img.shields.io/badge/MCP-Server-purple)
-![Plugin CI](https://github.com/techdeveloper-org/mcp-figma/actions/workflows/plugin-ci.yml/badge.svg)
 
 Figma design-to-code MCP server for Claude Code. Connects Claude to the Figma REST API over stdio JSON-RPC, enabling design file inspection, component extraction, design token parsing, frame layout analysis, image export, and design review comments — all without any external HTTP client dependencies (stdlib `urllib` only). Used by the Claude Workflow Engine to automate the design-to-code lifecycle: extracting components and tokens during orchestration planning (Step 0), posting implementation progress comments (Step 10), running design fidelity review (Step 11), and closing the design review loop on merge (Step 12).
 
@@ -440,8 +439,8 @@ mcp-figma/
 |   +-- phase-3-design/
 |       +-- README.md                 # Output file registry (10 artifacts, creation order)
 |       +-- token-pipeline-spec.md    # DTCG pipeline + APCA/WCAG validation sequence
-+-- .github/workflows/
-|   +-- plugin-ci.yml         # 4-job CI: typecheck → unit tests (100%) → npm audit → package
+|   (no .github/ — CI removed; run the checks locally, see below)
+|                             # was: 4-job CI: typecheck → unit tests (100%) → npm audit → package
 +-- README.md
 ```
 

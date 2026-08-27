@@ -94,8 +94,15 @@ def create_variable(
     name: str,
     var_type: str,
     value: Any,
+    mode_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create a new variable in the specified collection.
+
+    Per the Figma REST API variables-endpoints contract, the initial value is
+    set via a "variableModeValues" entry (list, keyed by variableId + modeId),
+    not a "variableValues" object -- and the CREATE entry in "variables" needs
+    a temporary id so the variableModeValues entry can reference it in the
+    same request. See https://developers.figma.com/docs/rest-api/variables-endpoints
 
     Args:
         file_key: Figma file key or full Figma file URL.
@@ -103,27 +110,42 @@ def create_variable(
         name: Display name for the new variable.
         var_type: Variable type string (e.g. COLOR, FLOAT, STRING, BOOLEAN).
         value: Initial value for the default mode.
+        mode_id: Mode to set the initial value for. When None, resolves the
+                 target collection's defaultModeId via list_variable_collections.
 
     Returns:
         Dict containing the created variable definition.
     """
     key = _parse_file_key(file_key)
+
+    resolved_mode_id = mode_id
+    if resolved_mode_id is None:
+        collections_resp = list_variable_collections(file_key)
+        collections = collections_resp.get("meta", {}).get("variableCollections", {})
+        collection = collections.get(collection_id, {}) if isinstance(collections, dict) else {}
+        resolved_mode_id = collection.get("defaultModeId")
+
+    temp_id = "new_variable"
+    variable_mode_values = []
+    if resolved_mode_id:
+        variable_mode_values.append({
+            "variableId": temp_id,
+            "modeId": resolved_mode_id,
+            "value": value,
+        })
+
     body: Dict[str, Any] = {
         "variableCollections": [],
         "variables": [
             {
                 "action": "CREATE",
+                "id": temp_id,
                 "variableCollectionId": collection_id,
                 "name": name,
                 "resolvedType": var_type,
             }
         ],
-        "variableValues": {
-            "": {
-                "action": "CREATE",
-                "value": value,
-            }
-        },
+        "variableModeValues": variable_mode_values,
     }
     response, _ = make_request(
         "/v1/files/" + key + "/variables",
@@ -141,31 +163,33 @@ def update_variable(
 ) -> Dict[str, Any]:
     """Update the value of an existing variable, optionally for a specific mode.
 
+    Per the Figma REST API variables-endpoints contract, a pure value update
+    only needs a "variableModeValues" entry (list) -- no "variables" mutation
+    entry is required unless the variable's own name/type/scope is changing.
+    See https://developers.figma.com/docs/rest-api/variables-endpoints
+
     Args:
         file_key: Figma file key or full Figma file URL.
         variable_id: Unique variable ID to update.
         value: New value to set.
-        mode_id: Optional mode ID; uses the default mode when None.
+        mode_id: Mode ID this value applies to. The Figma API's own example
+                 always includes it; omit only if the target has a single mode.
 
     Returns:
         Dict containing the updated variable definition.
     """
     key = _parse_file_key(file_key)
-    value_entry: Dict[str, Any] = {"action": "UPDATE", "value": value}
+    mode_value_entry: Dict[str, Any] = {
+        "variableId": variable_id,
+        "value": value,
+    }
     if mode_id is not None:
-        value_entry["modeId"] = mode_id
+        mode_value_entry["modeId"] = mode_id
 
     body: Dict[str, Any] = {
         "variableCollections": [],
-        "variables": [
-            {
-                "action": "UPDATE",
-                "id": variable_id,
-            }
-        ],
-        "variableValues": {
-            variable_id: value_entry,
-        },
+        "variables": [],
+        "variableModeValues": [mode_value_entry],
     }
     response, _ = make_request(
         "/v1/files/" + key + "/variables",

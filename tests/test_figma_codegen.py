@@ -79,6 +79,18 @@ def test_layout_flexbox_padding_values():
 
 
 @pytest.mark.unit
+def test_layout_flexbox_css_dict_padding_is_valid_css():
+    """css_dict['padding'] must be a valid CSS shorthand string (regression:
+    _fmt_px already appends 'px', so the format string must not append it again).
+    """
+    node = load_fixture("frame_with_autolayout.json")
+    result = layout_to_flexbox(node)
+
+    assert result["css_dict"]["padding"] == "12px 16px 12px 16px"
+    assert "pxpx" not in result["css_dict"]["padding"]
+
+
+@pytest.mark.unit
 def test_layout_flexbox_gap():
     """itemSpacing from fixture maps to gap value."""
     node = load_fixture("frame_with_autolayout.json")

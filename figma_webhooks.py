@@ -125,7 +125,9 @@ def verify_webhook_signature(
         secret: Shared secret (passcode) configured for the webhook.
 
     Returns:
-        Dict with valid (bool), computed_signature, and provided_signature.
+        Dict with valid (bool), computed_signature (truncated to 8 hex chars
+        + "..." -- never the full hash, to avoid leaking it via logs/responses),
+        and timing_safe (bool, always True -- comparison uses hmac.compare_digest).
     """
     computed = hmac.new(
         secret.encode("utf-8"),

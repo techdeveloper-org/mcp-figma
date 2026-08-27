@@ -801,6 +801,7 @@ def figma_create_variable(
     name: str,
     var_type: str,
     value: Any,
+    mode_id: Optional[str] = None,
 ) -> dict:
     """Create a new variable in the specified Figma collection.
 
@@ -810,6 +811,8 @@ def figma_create_variable(
         name: Display name for the new variable.
         var_type: Variable type (COLOR, FLOAT, STRING, BOOLEAN).
         value: Initial value for the default mode.
+        mode_id: Mode to set the initial value for. When None, resolves the
+                 target collection's defaultModeId automatically.
     """
     return figma_variables.create_variable(
         figma_client._parse_file_key(file_key),
@@ -817,6 +820,7 @@ def figma_create_variable(
         name,
         var_type,
         value,
+        mode_id=mode_id,
     )
 
 
@@ -1024,7 +1028,10 @@ def figma_scan_color_accessibility(
     file_key: str,
     node_id: Optional[str] = None,
 ) -> dict:
-    """Scan a Figma file for color accessibility violations (WCAG + APCA).
+    """Scan a Figma file for color accessibility violations (WCAG AA, 4.5:1 threshold).
+
+    Checks text/background color pairs only against WCAG contrast -- does NOT
+    compute APCA. Use figma_compute_apca_contrast separately for APCA checks.
 
     Args:
         file_key: Figma file key or full Figma file URL.

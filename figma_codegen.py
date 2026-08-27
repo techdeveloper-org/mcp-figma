@@ -102,7 +102,7 @@ def _transform_node_to_flexbox(node: Dict[str, Any]) -> Dict[str, Any]:
     pad_left = float(node.get("paddingLeft", 0))
     gap = float(node.get("itemSpacing", 0))
 
-    padding_str = "{top}px {right}px {bottom}px {left}px".format(
+    padding_str = "{top} {right} {bottom} {left}".format(
         top=_fmt_px(pad_top),
         right=_fmt_px(pad_right),
         bottom=_fmt_px(pad_bottom),

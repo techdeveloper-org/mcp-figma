@@ -124,15 +124,18 @@ def scan_color_accessibility(
 ) -> Dict[str, Any]:
     """Scan a Figma file (or specific node) for color accessibility violations.
 
-    Fetches node tree, extracts fill and stroke color pairs from text nodes
-    and their parent backgrounds, then runs WCAG and APCA checks on each pair.
+    Fetches node tree, extracts fill color pairs from text nodes and their
+    parent backgrounds, then runs a WCAG 2.x contrast check (AA normal-text
+    threshold, ratio >= 4.5) on each pair. Does NOT compute APCA -- use
+    compute_apca_contrast separately for APCA-specific checks.
 
     Args:
         file_key: Figma file key or full Figma file URL.
         node_id: Optional node ID to scope the scan to a subtree.
 
     Returns:
-        Dict with violations list, pass_count, fail_count, and checked_pairs.
+        Dict with violations (list of {node_id, text_color, bg_color, ratio,
+        threshold}), compliant_count, violation_count, and checked_pairs.
     """
     key = _parse_file_key(file_key)
 

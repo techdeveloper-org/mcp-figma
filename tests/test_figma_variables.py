@@ -214,14 +214,51 @@ class TestCreateVariable:
         assert call_kw["body"]["variables"][0]["resolvedType"] == "COLOR"
         assert call_kw["body"]["variables"][0]["variableCollectionId"] == "col1"
 
-    def test_includes_value_in_variable_values(self, mock_make_request, mock_parse_key):
-        """create_variable includes the initial value in variableValues."""
+    def test_includes_value_in_variable_mode_values_with_explicit_mode_id(
+        self, mock_make_request, mock_parse_key
+    ):
+        """With an explicit mode_id, create_variable sets variableModeValues
+        (per the real Figma REST API contract -- verified against
+        https://developers.figma.com/docs/rest-api/variables-endpoints) and
+        does not look up the collection's default mode."""
         mock_make_request.return_value = ({}, None)
+
+        figma_variables.create_variable(
+            "FILEKEY", "col1", "spacing", "FLOAT", 16, mode_id="mode1"
+        )
+
+        assert mock_make_request.call_count == 1
+        body = mock_make_request.call_args[1]["body"]
+        assert "variableValues" not in body
+        assert body["variableModeValues"] == [
+            {"variableId": "new_variable", "modeId": "mode1", "value": 16}
+        ]
+        assert body["variables"][0]["id"] == "new_variable"
+
+    def test_resolves_default_mode_id_when_not_given(
+        self, mock_make_request, mock_parse_key
+    ):
+        """Without mode_id, create_variable resolves the target collection's
+        defaultModeId via a list_variable_collections lookup first."""
+        collections_resp = {
+            "meta": {
+                "variableCollections": {
+                    "col1": {"id": "col1", "defaultModeId": "default-mode"}
+                }
+            }
+        }
+        mock_make_request.side_effect = [
+            (collections_resp, None),
+            ({}, None),
+        ]
 
         figma_variables.create_variable("FILEKEY", "col1", "spacing", "FLOAT", 16)
 
-        body = mock_make_request.call_args[1]["body"]
-        assert body["variableValues"][""]["value"] == 16
+        assert mock_make_request.call_count == 2
+        body = mock_make_request.call_args_list[1][1]["body"]
+        assert body["variableModeValues"] == [
+            {"variableId": "new_variable", "modeId": "default-mode", "value": 16}
+        ]
 
     def test_returns_api_response(self, mock_make_request, mock_parse_key):
         """create_variable returns the raw API response."""
@@ -240,25 +277,30 @@ class TestUpdateVariable:
     """Tests for update_variable()."""
 
     def test_update_without_mode_id(self, mock_make_request, mock_parse_key):
-        """Without mode_id, modeId is absent from the value entry."""
+        """Without mode_id, modeId is absent from the variableModeValues entry
+        (per the real Figma REST API contract -- verified against
+        https://developers.figma.com/docs/rest-api/variables-endpoints)."""
         mock_make_request.return_value = ({}, None)
 
         figma_variables.update_variable("FILEKEY", "v1", "#0f0")
 
         body = mock_make_request.call_args[1]["body"]
-        entry = body["variableValues"]["v1"]
-        assert entry["action"] == "UPDATE"
+        assert "variableValues" not in body
+        assert body["variables"] == []
+        entry = body["variableModeValues"][0]
+        assert entry["variableId"] == "v1"
         assert entry["value"] == "#0f0"
         assert "modeId" not in entry
 
     def test_update_with_mode_id(self, mock_make_request, mock_parse_key):
-        """With mode_id, modeId is included in the value entry."""
+        """With mode_id, modeId is included in the variableModeValues entry."""
         mock_make_request.return_value = ({}, None)
 
         figma_variables.update_variable("FILEKEY", "v1", "#0f0", mode_id="dark-mode")
 
         body = mock_make_request.call_args[1]["body"]
-        assert body["variableValues"]["v1"]["modeId"] == "dark-mode"
+        assert body["variableModeValues"][0]["modeId"] == "dark-mode"
+        assert body["variableModeValues"][0]["variableId"] == "v1"
 
     def test_posts_to_variables_endpoint(self, mock_make_request, mock_parse_key):
         """update_variable POSTs to the /v1/files/{key}/variables endpoint."""

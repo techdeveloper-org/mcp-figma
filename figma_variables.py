@@ -218,7 +218,6 @@ def delete_variable(file_key: str, variable_id: str) -> Dict[str, Any]:
                 "id": variable_id,
             }
         ],
-        "variableValues": {},
     }
     response, _ = make_request(
         "/v1/files/" + key + "/variables",

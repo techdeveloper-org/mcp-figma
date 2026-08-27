@@ -330,14 +330,17 @@ class TestDeleteVariable:
         assert body["variables"][0]["action"] == "DELETE"
         assert body["variables"][0]["id"] == "v1"
 
-    def test_empty_variable_values(self, mock_make_request, mock_parse_key):
-        """delete_variable sends empty variableValues dict."""
+    def test_no_variable_values_key(self, mock_make_request, mock_parse_key):
+        """delete_variable does not send a variableValues/variableModeValues
+        key (per the real Figma REST API contract, DELETE needs only the
+        variables[] mutation entry -- no value field at all)."""
         mock_make_request.return_value = ({}, None)
 
         figma_variables.delete_variable("FILEKEY", "v1")
 
         body = mock_make_request.call_args[1]["body"]
-        assert body["variableValues"] == {}
+        assert "variableValues" not in body
+        assert "variableModeValues" not in body
 
     def test_returns_api_response(self, mock_make_request, mock_parse_key):
         mock_make_request.return_value = ({"deleted": True}, None)

@@ -31,6 +31,8 @@ This repository also contains the **Design Spec Importer** — a TypeScript Figm
 - Visual regression via perceptual hash (pHash) and Hamming distance comparison
 - Semantic version bump computation from two DTCG token snapshots
 
+**Not superseded by Figma's official MCP server:** Figma now ships a first-party remote MCP server (`https://mcp.figma.com/mcp`) with genuine canvas-write tools (`create_new_file`, `use_figma`, `generate_figma_design`). It has zero accessibility/contrast tools, zero visual-regression tools, and zero webhook tools, and only flat token extraction versus this repo's validated/diffed/multiplatform token pipeline — the two are complementary, not competing. Full comparison table: `CLAUDE.md`'s "Relationship to Figma's official MCP server" section.
+
 **Design Spec Importer Plugin (`plugin/`):**
 
 - Reads AI-generated `design_spec.json` (validated against JSON Schema Draft-07 at startup)

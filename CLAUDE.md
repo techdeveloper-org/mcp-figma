@@ -12,6 +12,24 @@ Figma design file operations via REST API for design-to-code workflows. Fetches 
 
 ---
 
+## Relationship to Figma's official MCP server (read this before assuming this repo is redundant)
+
+Figma now ships a first-party remote MCP server (`https://mcp.figma.com/mcp`, registered in Claude Code as `figma` — a *different* registration from this repo's own `figma-api` entry in `~/.claude/settings.json`) with genuine canvas-write tools: `create_new_file`, `use_figma`, `generate_figma_design`, `generate_diagram`. **This does not make this repo redundant.** The two servers cover mostly different ground, verified by a full tool-list comparison (`developers.figma.com/docs/figma-mcp-server/tools-and-prompts/` vs. this file's own 47-tool inventory below):
+
+| Capability | This repo (`figma-api`) | Figma official (`figma`) |
+|---|---|---|
+| Canvas write / file creation | **Cannot** — Figma's public REST API (what this repo wraps) has no content-creation endpoints; only Figma's own privileged internal integration can write to canvas | `create_new_file`, `use_figma`, `generate_figma_design`, `generate_diagram` |
+| Accessibility / contrast (APCA, WCAG) | `figma_compute_apca_contrast`, `figma_compute_wcag_contrast`, `get_accessible_color_pairs` | **None** — zero contrast/accessibility tools in the official list |
+| Visual regression | `compute_phash`, `compare_phash_hamming`, `bump_token_semver` | **None** |
+| Webhooks | 5 tools (create/list/delete/get_events/verify_signature) | **None** |
+| Token extraction depth | DTCG schema validation, Levenshtein-based diff/rename detection, Kahn-topological-sort alias resolution, multiplatform (Android/iOS/CSS) generation with real type-scale/fluid-`clamp()` math | `get_variable_defs` — flat extraction only, no validation/diffing/multiplatform math |
+| Variable CRUD | create/set/batch-update/publish (8 tools) | Not itemized in the official tool list |
+| Code generation | Deterministic, structure-driven: React/SwiftUI/Android/CSS/Flutter from a frame's actual properties | AI-driven, single-selection-scoped, React+Tailwind-first (`get_design_context`) |
+
+**Practical rule:** use the official `figma` server for canvas creation/writing. Keep using this repo's `figma-api` tools for everything else — accessibility validation, visual regression, webhooks, and the deep token pipeline. Neither server should be deprecated in favor of the other; they are complementary, not competing. See `pipelines/ui-ux-design-pipeline/UI_UX_DESIGN_PIPELINE.md` in `claude-global-library` for how both are used together in Phase 3. Full context: `claude-global-library` issue #149.
+
+---
+
 ## Entry Point
 
 ```

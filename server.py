@@ -344,14 +344,26 @@ def figma_get_file_info(file_key: str) -> dict:
 
 @mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
-def figma_get_node(file_key: str, node_id: str) -> dict:
+def figma_get_node(
+    file_key: str,
+    node_id: str,
+    offset: int = 0,
+    limit: int = 20,
+) -> dict:
     """Get details of a specific node (frame, component, group, etc.) by ID.
 
-    Returns type, name, size, fills, strokes, effects, and a children summary.
+    Returns type, name, size, fills, strokes, effects, and a paginated
+    children summary. children_count always reflects the true total number
+    of children; children_summary is a window into that list controlled by
+    offset/limit, and has_more indicates whether further pages remain.
 
     Args:
         file_key: Figma file key or full Figma file URL.
         node_id: Node ID string (e.g. "1:23" or "123:456").
+        offset: Index of the first child to include in children_summary.
+                Default 0.
+        limit: Maximum number of children to include in children_summary.
+               Default 20.
     """
     key = _parse_file_key(file_key)
     data = _make_figma_request(
@@ -371,10 +383,12 @@ def figma_get_node(file_key: str, node_id: str) -> dict:
         "height": bbox.get("height") or node.get("size", {}).get("y"),
     }
 
-    # Summarize children
+    children = node.get("children", [])
+    children_count = len(children)
+    page = children[offset:offset + limit]
     children_summary = [
         {"id": c.get("id"), "name": c.get("name"), "type": c.get("type")}
-        for c in node.get("children", [])[:20]  # cap at 20
+        for c in page
     ]
 
     return {
@@ -388,33 +402,61 @@ def figma_get_node(file_key: str, node_id: str) -> dict:
         "effects": node.get("effects", []),
         "opacity": node.get("opacity", 1),
         "visible": node.get("visible", True),
-        "children_count": len(node.get("children", [])),
+        "children_count": children_count,
         "children_summary": children_summary,
+        "has_more": offset + limit < children_count,
     }
 
 
 @mcp.tool(annotations=_READ_REMOTE)
 @mcp_tool_handler
 def figma_get_styles(file_key: str) -> dict:
-    """Extract all published styles from a Figma file (colors, text, effects, grids).
+    """Extract all styles from a Figma file, both published and local.
+
+    Merges the team-library published styles listing
+    (GET /v1/files/:key/styles) with the file's own embedded styles map
+    (GET /v1/files/:key), since the published-styles endpoint omits
+    locally-created styles that were never published to a library. Each
+    style entry carries a published flag: true when it also appears in the
+    published listing, false when it was found only in the file's own
+    embedded styles map. A style present in both listings is deduplicated
+    by its style key and reported once, marked published=true.
 
     Args:
         file_key: Figma file key or full Figma file URL.
     """
     key = _parse_file_key(file_key)
-    data = _make_figma_request("/v1/files/" + key + "/styles")
+    published_data = _make_figma_request("/v1/files/" + key + "/styles")
 
-    raw_styles = data.get("meta", {}).get("styles", [])
-    styles = [
-        {
-            "key": s.get("key", ""),
+    raw_published = published_data.get("meta", {}).get("styles", [])
+    styles: List[Dict[str, Any]] = []
+    published_keys = set()
+    for s in raw_published:
+        style_key = s.get("key", "")
+        published_keys.add(style_key)
+        styles.append({
+            "key": style_key,
             "name": s.get("name", ""),
             "type": s.get("style_type", ""),
             "description": s.get("description", ""),
             "node_id": s.get("node_id", ""),
-        }
-        for s in raw_styles
-    ]
+            "published": True,
+        })
+
+    file_data = _make_figma_request("/v1/files/" + key)
+    embedded_styles = file_data.get("styles", {}) or {}
+    for node_id, s in embedded_styles.items():
+        style_key = s.get("key", "")
+        if style_key and style_key in published_keys:
+            continue
+        styles.append({
+            "key": style_key,
+            "name": s.get("name", ""),
+            "type": s.get("styleType", ""),
+            "description": s.get("description", ""),
+            "node_id": node_id,
+            "published": False,
+        })
 
     # Group by type for convenience
     by_type: Dict[str, List[dict]] = {}
@@ -686,20 +728,33 @@ def figma_add_comment(
     file_key: str,
     message: str,
     node_id: Optional[str] = None,
+    x: float = 0,
+    y: float = 0,
 ) -> dict:
     """Add an implementation or review comment to a Figma file.
+
+    When node_id is given, anchors the comment via a FrameOffset client_meta
+    ({node_id, node_offset: {x, y}}) as required by Figma's comments API --
+    a bare {node_id} without node_offset is rejected with HTTP 400.
 
     Args:
         file_key: Figma file key or full Figma file URL.
         message: Comment text to post.
         node_id: Optional node ID to anchor the comment to a specific frame.
+        x: Horizontal offset in px from the node's origin. Only used with
+           node_id. Default 0 (top-left of the node).
+        y: Vertical offset in px from the node's origin. Only used with
+           node_id. Default 0 (top-left of the node).
     """
     key = _parse_file_key(file_key)
     message = validate_input(message, max_length=2000, field_name="message")
 
     body: Dict[str, Any] = {"message": message}
     if node_id:
-        body["client_meta"] = {"node_id": node_id}
+        body["client_meta"] = {
+            "node_id": node_id,
+            "node_offset": {"x": x, "y": y},
+        }
 
     data = _make_figma_request(
         "/v1/files/" + key + "/comments",

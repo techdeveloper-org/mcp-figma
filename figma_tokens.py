@@ -146,6 +146,46 @@ def _safe_name(raw: str) -> str:
     return name or "token"
 
 
+def _flatten_dtcg_tokens(
+    tokens: Dict[str, Any],
+    _prefix: str = "",
+) -> Dict[str, Any]:
+    """Recursively flatten a DTCG token tree into a flat dot-path token map.
+
+    The W3C DTCG 2025.10 spec's canonical token shape is nested groups
+    (e.g. {"color": {"primary": {"$type": "color", "$value": "#0074CA"}}}),
+    while every consumer in this module historically assumed the caller had
+    already flattened the tree to dot-path keys. This walker accepts either
+    shape: a key maps to a token leaf when its value is a dict containing
+    both "$type" and "$value"; any other dict value is treated as a group
+    and recursed into, joining keys with "." to build the leaf's dot-path
+    name. An already-flat map is simply a one-level tree whose values are
+    all leaves, so it passes through with its existing keys unchanged.
+    Metadata keys starting with "$" (e.g. "$schema", "$description") are
+    skipped at every level.
+
+    Args:
+        tokens: DTCG token dict, flat or nested to any depth.
+        _prefix: Internal accumulator for the dot-path prefix during
+                 recursion. Callers should not pass this.
+
+    Returns:
+        Flat dict mapping dot-path token name -> DTCG leaf token object.
+    """
+    flat: Dict[str, Any] = {}
+    for name, value in tokens.items():
+        if name.startswith("$"):
+            continue
+        path = _prefix + "." + name if _prefix else name
+        if not isinstance(value, dict):
+            continue
+        if "$type" in value and "$value" in value:
+            flat[path] = value
+        else:
+            flat.update(_flatten_dtcg_tokens(value, path))
+    return flat
+
+
 def _walk_nodes(node: Dict[str, Any], collector: List[Dict[str, Any]]) -> None:
     """Recursively walk a Figma document node tree and collect leaf nodes.
 
@@ -488,14 +528,16 @@ def resolve_token_aliases(dtcg_tokens: Dict[str, Any]) -> Dict[str, Any]:
     before all nodes are processed.
 
     Args:
-        dtcg_tokens: Dict with a 'tokens' key containing the flat DTCG token map
-                     (name -> {$value, $type, ...}).
+        dtcg_tokens: Dict with a 'tokens' key containing the DTCG token map,
+                     either flat (dot-path name -> {$value, $type, ...}) or
+                     nested in W3C DTCG groups -- both shapes are flattened
+                     to dot-path names before alias resolution.
 
     Returns:
         Dict with resolved_tokens, aliases_resolved (int), cycles_detected (list
         of token names in cycles), and resolution_order (list of names in topo order).
     """
-    raw_tokens: Dict[str, Any] = dtcg_tokens.get("tokens", {})
+    raw_tokens: Dict[str, Any] = _flatten_dtcg_tokens(dtcg_tokens.get("tokens", {}))
 
     _ALIAS_RE = re.compile(r"^\{([^}]+)\}$")
 
@@ -557,21 +599,24 @@ def tokens_to_css_vars(
     dtcg_tokens: Dict[str, Any],
     prefix: str = "--",
 ) -> Dict[str, Any]:
-    """Convert a flat DTCG token dict to CSS custom property declarations.
+    """Convert a DTCG token dict to CSS custom property declarations.
 
-    Each token name has dots replaced with hyphens and is prepended with the
+    Accepts either a flat token map (dot-path name -> leaf) or a nested
+    W3C DTCG group tree; both are flattened to dot-path names first. Each
+    token name has dots replaced with hyphens and is prepended with the
     given prefix. Color tokens use hex values directly; dimension tokens append
     'px' when the value is numeric; fontFamily values are wrapped in quotes.
 
     Args:
-        dtcg_tokens: Dict with a 'tokens' key containing DTCG token map.
+        dtcg_tokens: Dict with a 'tokens' key containing the DTCG token map,
+                     flat or nested.
         prefix: CSS variable prefix string. Default "--".
 
     Returns:
         Dict with css_content (full ':root { ... }' CSS block string), var_count
         (int), and token_names (list of CSS variable names).
     """
-    raw_tokens: Dict[str, Any] = dtcg_tokens.get("tokens", {})
+    raw_tokens: Dict[str, Any] = _flatten_dtcg_tokens(dtcg_tokens.get("tokens", {}))
     lines: List[str] = []
     token_names: List[str] = []
 

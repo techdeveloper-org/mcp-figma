@@ -233,6 +233,74 @@ def test_css_rem_color_tokens_excluded():
 
 
 # ---------------------------------------------------------------------------
+# Nested DTCG group traversal (Bug 3 regression coverage)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_css_rem_nested_two_level_groups():
+    """A nested 2-level DTCG group tree (spacing.sm) still converts to rem."""
+    dtcg = {
+        "tokens": {
+            "spacing": {
+                "sm": {"$value": "8px", "$type": "dimension"},
+            },
+        }
+    }
+    result = tokens_to_css_rem(dtcg, base_font_px=16)
+
+    assert "spacing.sm" in result["rem_values"]
+    assert result["rem_values"]["spacing.sm"] == pytest.approx(0.5, rel=0.001)
+
+
+@pytest.mark.unit
+def test_tokens_to_android_nested_groups():
+    """tokens_to_android flattens nested groups before dp/sp conversion."""
+    dtcg = {
+        "tokens": {
+            "spacing": {
+                "md": {"$value": "16px", "$type": "dimension"},
+            },
+        }
+    }
+    result = tokens_to_android(dtcg, density=2.0)
+
+    assert "spacing_md" in result["dp_values"]
+    assert result["dp_values"]["spacing_md"] == pytest.approx(8.0, rel=0.001)
+
+
+@pytest.mark.unit
+def test_tokens_to_ios_nested_groups():
+    """tokens_to_ios flattens nested groups before pt conversion."""
+    dtcg = {
+        "tokens": {
+            "spacing": {
+                "lg": {"$value": "32px", "$type": "dimension"},
+            },
+        }
+    }
+    result = tokens_to_ios(dtcg, base_ppi=163.0, target_ppi=326.0)
+
+    assert "spacingLg" in result["pt_values"]
+    assert result["pt_values"]["spacingLg"] == pytest.approx(16.0, rel=0.001)
+
+
+@pytest.mark.unit
+def test_dark_mode_token_pairs_nested_groups():
+    """dark_mode_token_pairs flattens nested groups before luminance computation."""
+    dtcg = {
+        "tokens": {
+            "color": {
+                "surface": {"$value": "#FFFFFF", "$type": "color"},
+            },
+        }
+    }
+    result = dark_mode_token_pairs(dtcg)
+
+    assert result["pair_count"] == 1
+    assert result["pairs"][0]["name"] == "color.surface"
+
+
+# ---------------------------------------------------------------------------
 # fluid_typography_clamp
 # ---------------------------------------------------------------------------
 

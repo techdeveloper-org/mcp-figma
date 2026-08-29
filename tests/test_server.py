@@ -317,23 +317,133 @@ class TestFigmaGetNode:
             result = _j(server.figma_get_node(file_key="KEY", node_id="1:2"))
         assert result["name"] == "Fallback"
 
-
-class TestFigmaGetStyles:
-    def test_returns_styles_grouped_by_type(self):
-        with patch("server._make_figma_request") as mock_req, \
-             patch("server._parse_file_key", return_value="KEY"):
-            mock_req.return_value = {
-                "meta": {
-                    "styles": [
-                        {"key": "k1", "name": "Primary", "style_type": "FILL", "description": "", "node_id": "1"},
-                        {"key": "k2", "name": "Heading", "style_type": "TEXT", "description": "", "node_id": "2"},
-                    ]
+    @staticmethod
+    def _node_with_children(count):
+        children = [
+            {"id": "c" + str(i), "name": "Child" + str(i), "type": "FRAME"}
+            for i in range(count)
+        ]
+        return {
+            "nodes": {
+                "1:2": {
+                    "document": {
+                        "name": "Screens",
+                        "type": "FRAME",
+                        "children": children,
+                    }
                 }
             }
+        }
+
+    def test_default_behavior_unchanged_for_le_20_children(self):
+        """14 children with default offset/limit returns all 14, has_more False (Bug 2 fix)."""
+        with patch("server._make_figma_request") as mock_req, \
+             patch("server._parse_file_key", return_value="KEY"):
+            mock_req.return_value = self._node_with_children(14)
+            result = _j(server.figma_get_node(file_key="KEY", node_id="1:2"))
+        assert result["children_count"] == 14
+        assert len(result["children_summary"]) == 14
+        assert result["has_more"] is False
+
+    def test_has_more_true_when_over_20_children_default_limit(self):
+        """25 children with default limit=20 returns 20 and flags has_more True."""
+        with patch("server._make_figma_request") as mock_req, \
+             patch("server._parse_file_key", return_value="KEY"):
+            mock_req.return_value = self._node_with_children(25)
+            result = _j(server.figma_get_node(file_key="KEY", node_id="1:2"))
+        assert result["children_count"] == 25
+        assert len(result["children_summary"]) == 20
+        assert result["has_more"] is True
+
+    def test_custom_offset_and_limit_retrieves_next_page(self):
+        """offset=20, limit=20 on 25 children returns the remaining 5 items."""
+        with patch("server._make_figma_request") as mock_req, \
+             patch("server._parse_file_key", return_value="KEY"):
+            mock_req.return_value = self._node_with_children(25)
+            result = _j(server.figma_get_node(
+                file_key="KEY", node_id="1:2", offset=20, limit=20,
+            ))
+        assert result["children_count"] == 25
+        assert len(result["children_summary"]) == 5
+        assert result["children_summary"][0]["id"] == "c20"
+        assert result["has_more"] is False
+
+    def test_has_more_false_on_last_page(self):
+        """offset+limit exactly equal to children_count reports has_more False."""
+        with patch("server._make_figma_request") as mock_req, \
+             patch("server._parse_file_key", return_value="KEY"):
+            mock_req.return_value = self._node_with_children(20)
+            result = _j(server.figma_get_node(
+                file_key="KEY", node_id="1:2", offset=0, limit=20,
+            ))
+        assert result["children_count"] == 20
+        assert len(result["children_summary"]) == 20
+        assert result["has_more"] is False
+
+
+class TestFigmaGetStyles:
+    def test_file_with_only_published_styles(self):
+        """Existing behavior: published-only file reports both styles as published=True."""
+        with patch("server._make_figma_request") as mock_req, \
+             patch("server._parse_file_key", return_value="KEY"):
+            mock_req.side_effect = [
+                {
+                    "meta": {
+                        "styles": [
+                            {"key": "k1", "name": "Primary", "style_type": "FILL", "description": "", "node_id": "1"},
+                            {"key": "k2", "name": "Heading", "style_type": "TEXT", "description": "", "node_id": "2"},
+                        ]
+                    }
+                },
+                {"styles": {}},
+            ]
             result = _j(server.figma_get_styles(file_key="KEY"))
         assert result["total_styles"] == 2
         assert "FILL" in result["by_type"]
         assert "TEXT" in result["by_type"]
+        assert all(s["published"] is True for s in result["styles"])
+
+    def test_file_with_only_local_unpublished_styles(self):
+        """A file with 7 local Text Styles never published still reports them (Bug 4 fix)."""
+        embedded = {
+            "1:10": {"key": "local-k1", "name": "Body", "styleType": "TEXT", "description": ""},
+            "1:11": {"key": "local-k2", "name": "Caption", "styleType": "TEXT", "description": ""},
+        }
+        with patch("server._make_figma_request") as mock_req, \
+             patch("server._parse_file_key", return_value="KEY"):
+            mock_req.side_effect = [
+                {"meta": {"styles": []}},
+                {"styles": embedded},
+            ]
+            result = _j(server.figma_get_styles(file_key="KEY"))
+        assert result["total_styles"] == 2
+        assert all(s["published"] is False for s in result["styles"])
+        assert "TEXT" in result["by_type"]
+
+    def test_file_with_both_published_and_local_dedups_by_key(self):
+        """A style present in both listings appears once, marked published=True."""
+        published = {
+            "meta": {
+                "styles": [
+                    {"key": "shared-k1", "name": "Primary", "style_type": "FILL", "description": "", "node_id": "1"},
+                ]
+            }
+        }
+        embedded = {
+            "1:1": {"key": "shared-k1", "name": "Primary", "styleType": "FILL", "description": ""},
+            "1:20": {"key": "local-k9", "name": "OnlyLocal", "styleType": "TEXT", "description": ""},
+        }
+        with patch("server._make_figma_request") as mock_req, \
+             patch("server._parse_file_key", return_value="KEY"):
+            mock_req.side_effect = [published, {"styles": embedded}]
+            result = _j(server.figma_get_styles(file_key="KEY"))
+        assert result["total_styles"] == 2
+        keys = [s["key"] for s in result["styles"]]
+        assert keys.count("shared-k1") == 1
+        shared = next(s for s in result["styles"] if s["key"] == "shared-k1")
+        assert shared["published"] is True
+        local_only = next(s for s in result["styles"] if s["key"] == "local-k9")
+        assert local_only["published"] is False
 
 
 class TestFigmaGetComponents:
@@ -454,19 +564,35 @@ class TestFigmaGetComments:
 
 class TestFigmaAddComment:
     def test_posts_comment_without_node(self):
+        """A message-only comment (no node_id) omits client_meta entirely."""
         with patch("server._make_figma_request") as mock_req, \
              patch("server._parse_file_key", return_value="KEY"):
             mock_req.return_value = {"id": "c1", "message": "hello", "created_at": "2026-01-01"}
             result = _j(server.figma_add_comment(file_key="KEY", message="hello"))
+        call_body = mock_req.call_args[1]["body"]
+        assert "client_meta" not in call_body
         assert result["comment_id"] == "c1"
 
-    def test_posts_comment_with_node_id(self):
+    def test_posts_comment_with_node_id_default_offset(self):
+        """node_id with no explicit x/y sends node_offset {x:0, y:0} (Bug 1 fix)."""
         with patch("server._make_figma_request") as mock_req, \
              patch("server._parse_file_key", return_value="KEY"):
             mock_req.return_value = {"id": "c2", "message": "node comment", "created_at": "2026-01-01"}
             result = _j(server.figma_add_comment(file_key="KEY", message="node comment", node_id="1:2"))
         call_body = mock_req.call_args[1]["body"]
-        assert "client_meta" in call_body
+        assert call_body["client_meta"] == {"node_id": "1:2", "node_offset": {"x": 0, "y": 0}}
+        assert result["node_id"] == "1:2"
+
+    def test_posts_comment_with_node_id_explicit_offset(self):
+        """node_id with explicit x/y forwards them in node_offset."""
+        with patch("server._make_figma_request") as mock_req, \
+             patch("server._parse_file_key", return_value="KEY"):
+            mock_req.return_value = {"id": "c3", "message": "anchored", "created_at": "2026-01-01"}
+            result = _j(server.figma_add_comment(
+                file_key="KEY", message="anchored", node_id="1:2", x=12.5, y=40,
+            ))
+        call_body = mock_req.call_args[1]["body"]
+        assert call_body["client_meta"] == {"node_id": "1:2", "node_offset": {"x": 12.5, "y": 40}}
         assert result["node_id"] == "1:2"
 
 

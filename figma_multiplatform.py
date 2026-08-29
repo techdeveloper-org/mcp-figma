@@ -14,6 +14,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from figma_client import make_request, _parse_file_key
+from figma_tokens import _flatten_dtcg_tokens
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +184,8 @@ def tokens_to_android(
     values/colors.xml and values/dimens.xml schemas.
 
     Args:
-        dtcg_tokens: Dict with a 'tokens' key containing the flat DTCG token map.
+        dtcg_tokens: Dict with a 'tokens' key containing the DTCG token map,
+                     flat or nested in W3C DTCG groups.
         density: Screen density multiplier for dp/sp conversion (px / density = dp).
                  Default 2.0 corresponds to xhdpi (320 dpi).
 
@@ -191,7 +193,7 @@ def tokens_to_android(
         Dict with xml_content (str, combined resources XML), dimen_count (int),
         dp_values (dict of name -> dp float), and sp_values (dict of name -> sp float).
     """
-    raw_tokens: Dict[str, Any] = dtcg_tokens.get("tokens", {})
+    raw_tokens: Dict[str, Any] = _flatten_dtcg_tokens(dtcg_tokens.get("tokens", {}))
 
     dimen_lines: List[str] = []
     dp_values: Dict[str, float] = {}
@@ -262,7 +264,8 @@ def tokens_to_ios(
     let constants in lowerCamelCase.
 
     Args:
-        dtcg_tokens: Dict with a 'tokens' key containing the flat DTCG token map.
+        dtcg_tokens: Dict with a 'tokens' key containing the DTCG token map,
+                     flat or nested in W3C DTCG groups.
         base_ppi: Base (non-retina) PPI of the target device. Default 163.0.
         target_ppi: Actual device PPI for scaling. Default 326.0 (Retina @2x).
 
@@ -270,7 +273,7 @@ def tokens_to_ios(
         Dict with swift_content (str Swift source), pt_values (dict of camelCase
         name -> pt float), and asset_catalog_hint (str).
     """
-    raw_tokens: Dict[str, Any] = dtcg_tokens.get("tokens", {})
+    raw_tokens: Dict[str, Any] = _flatten_dtcg_tokens(dtcg_tokens.get("tokens", {}))
     scale = base_ppi / target_ppi
     pt_values: Dict[str, float] = {}
     prop_lines: List[str] = []
@@ -315,14 +318,15 @@ def tokens_to_css_rem(
     values are skipped. Emits a ':root { ... }' CSS block.
 
     Args:
-        dtcg_tokens: Dict with a 'tokens' key containing the flat DTCG token map.
+        dtcg_tokens: Dict with a 'tokens' key containing the DTCG token map,
+                     flat or nested in W3C DTCG groups.
         base_font_px: Root font size in pixels used as the rem divisor. Default 16.
 
     Returns:
         Dict with css_content (str ':root { ... }' block), rem_values (dict of
         token name -> rem float), and unitless_values (dict of token name -> px float).
     """
-    raw_tokens: Dict[str, Any] = dtcg_tokens.get("tokens", {})
+    raw_tokens: Dict[str, Any] = _flatten_dtcg_tokens(dtcg_tokens.get("tokens", {}))
     rem_values: Dict[str, float] = {}
     unitless_values: Dict[str, float] = {}
     css_lines: List[str] = []
@@ -359,13 +363,14 @@ def dark_mode_token_pairs(dtcg_tokens: Dict[str, Any]) -> Dict[str, Any]:
     scaling (KG M5 polarity flip). Reverses the sRGB gamma to recover hex.
 
     Args:
-        dtcg_tokens: Dict with a 'tokens' key containing the flat DTCG token map.
+        dtcg_tokens: Dict with a 'tokens' key containing the DTCG token map,
+                     flat or nested in W3C DTCG groups.
 
     Returns:
         Dict with pairs (list of {name, light, dark, light_luminance, dark_luminance})
         and pair_count (int).
     """
-    raw_tokens: Dict[str, Any] = dtcg_tokens.get("tokens", {})
+    raw_tokens: Dict[str, Any] = _flatten_dtcg_tokens(dtcg_tokens.get("tokens", {}))
     pairs: List[Dict[str, Any]] = []
 
     for name, token in raw_tokens.items():

@@ -246,6 +246,98 @@ def test_tokens_to_css_vars_token_names_list():
 
 
 # ---------------------------------------------------------------------------
+# Nested DTCG group traversal (Bug 3 regression coverage)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_tokens_to_css_vars_already_flat_input_regression():
+    """A pre-flattened dot-path token map keeps working exactly as before."""
+    dtcg = {
+        "tokens": {
+            "color.primary": {"$value": "#0074CA", "$type": "color"},
+            "spacing.small": {"$value": "8px", "$type": "dimension"},
+        }
+    }
+    result = tokens_to_css_vars(dtcg)
+    assert result["var_count"] == 2
+    assert "--color-primary: #0074CA;" in result["css_content"]
+    assert "--spacing-small: 8px;" in result["css_content"]
+
+
+@pytest.mark.unit
+def test_tokens_to_css_vars_nested_two_level_groups():
+    """A genuinely nested 2-level DTCG group tree produces one var per leaf."""
+    dtcg = {
+        "tokens": {
+            "color": {
+                "primary": {"$value": "#0074CA", "$type": "color"},
+            },
+            "spacing": {
+                "sm": {"$value": "4px", "$type": "dimension"},
+            },
+        }
+    }
+    result = tokens_to_css_vars(dtcg)
+    assert result["var_count"] == 2
+    assert "--color-primary: #0074CA;" in result["css_content"]
+    assert "--spacing-sm: 4px;" in result["css_content"]
+    # The pre-fix bug produced an empty var per top-level category instead.
+    assert "--color: ;" not in result["css_content"]
+    assert "--spacing: ;" not in result["css_content"]
+
+
+@pytest.mark.unit
+def test_tokens_to_css_vars_nested_three_level_groups():
+    """A genuinely nested 3-level DTCG group tree (color.brand.primary) resolves."""
+    dtcg = {
+        "tokens": {
+            "color": {
+                "brand": {
+                    "primary": {"$value": "#123456", "$type": "color"},
+                },
+            },
+        }
+    }
+    result = tokens_to_css_vars(dtcg)
+    assert result["var_count"] == 1
+    assert "--color-brand-primary: #123456;" in result["css_content"]
+
+
+@pytest.mark.unit
+def test_tokens_to_css_vars_mixed_flat_and_nested():
+    """A token map mixing already-flat keys and nested groups flattens both."""
+    dtcg = {
+        "tokens": {
+            "color.primary": {"$value": "#fff", "$type": "color"},
+            "spacing": {
+                "sm": {"$value": "4px", "$type": "dimension"},
+            },
+        }
+    }
+    result = tokens_to_css_vars(dtcg)
+    assert result["var_count"] == 2
+    assert "--color-primary: #fff;" in result["css_content"]
+    assert "--spacing-sm: 4px;" in result["css_content"]
+
+
+@pytest.mark.unit
+def test_resolve_token_aliases_nested_groups():
+    """resolve_token_aliases flattens nested groups before alias resolution."""
+    tokens = {
+        "tokens": {
+            "color": {
+                "brand": {"$value": "#FF0000", "$type": "color"},
+                "primary": {"$value": "{color.brand}", "$type": "color"},
+            },
+        }
+    }
+    result = resolve_token_aliases(tokens)
+    assert result["resolved_tokens"]["color.brand"]["$value"] == "#FF0000"
+    assert result["resolved_tokens"]["color.primary"]["$value"] == "#FF0000"
+    assert result["aliases_resolved"] >= 1
+
+
+# ---------------------------------------------------------------------------
 # diff_token_versions
 # ---------------------------------------------------------------------------
 

@@ -456,7 +456,7 @@ The `base/` directory is a copy of the shared [mcp-base](https://github.com/tech
 
 > **Standalone.** This server has no runtime dependency on any other project. It speaks MCP over stdio and works with any MCP client.
 
-This server is one of 13 that were split out of the [claude-workflow-engine](https://github.com/techdeveloper-org/claude-workflow-engine) into independent repositories for separate versioning and reuse:
+This server is one of 13 that were split out of the [ai-native-sdlc-engine](https://github.com/techdeveloper-org/ai-native-sdlc-engine) into independent repositories for separate versioning and reuse:
 
 | Server | Purpose |
 |--------|---------|
